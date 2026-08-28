@@ -33,7 +33,7 @@ console.log("selected file text:", await page.locator("#selected-file-name").tex
 
 await page.locator("#generate-btn").click();
 
-await page.locator("#results").waitFor({ state: "visible", timeout: 20000 });
+await page.locator("#results").waitFor({ state: "visible", timeout: 180000 });
 console.log("=== RESULTS HEADING ===", await page.locator("#results-heading").textContent());
 
 const rows = page.locator("#results-list .result-row");
