@@ -203,25 +203,37 @@ function buildAreaField(data) {
   return parts.join(" ").toUpperCase();
 }
 
-// Anchors copied from the reference SOT's own drawingN.xml (top-right corner,
-// rows 2-3). "Hoja de datos" keeps its own anchor; every ACT sheet reuses the
-// original "1. ACT 1" anchor, since dynamically added ACT sheets (beyond the
-// 3 pre-built ones) have no anchor of their own to copy.
+// Each sheet in the template carries two logos: Circular HR fixed on the
+// top-right (never touched) and the client company's own logo on the
+// top-left (this is the one this tool replaces). Anchors below are copied
+// from the reference SOT's own drawingN.xml for that left slot. "Hoja de
+// datos" keeps its own anchor; every ACT sheet reuses the original
+// "1. ACT 1" anchor, since dynamically added ACT sheets (beyond the 3
+// pre-built ones) have no anchor of their own to copy.
 const LOGO_ANCHOR_HOJA_DATOS = {
-  tl: { nativeCol: 10, nativeColOff: 504825, nativeRow: 2, nativeRowOff: 21430 },
-  br: { nativeCol: 12, nativeColOff: 330993, nativeRow: 3, nativeRowOff: 259555 },
+  tl: { nativeCol: 1, nativeColOff: 57151, nativeRow: 1, nativeRowOff: 19051 },
+  br: { nativeCol: 4, nativeColOff: 57150, nativeRow: 5, nativeRowOff: 7649 },
   editAs: "oneCell",
 };
 const LOGO_ANCHOR_ACT = {
-  tl: { nativeCol: 11, nativeColOff: 173832, nativeRow: 2, nativeRowOff: 19050 },
-  br: { nativeCol: 12, nativeColOff: 90488, nativeRow: 3, nativeRowOff: 161925 },
+  tl: { nativeCol: 1, nativeColOff: 38100, nativeRow: 1, nativeRowOff: 19051 },
+  br: { nativeCol: 3, nativeColOff: 847725, nativeRow: 3, nativeRowOff: 334689 },
   editAs: "oneCell",
 };
 
-function replaceLogo(ws, imageId, anchor) {
+// Always clears whatever company logo the template shipped with (so a SOT
+// generated without an uploaded logo ends up with that slot empty, not the
+// template's default), then adds the new one if provided. Only removes
+// images anchored at this exact top-left slot, so the fixed Circular HR
+// logo on the right is never touched.
+function replaceCompanyLogo(ws, imageId, anchor) {
   if (!ws) return;
-  ws._media = [];
-  ws.addImage(imageId, anchor);
+  ws._media = ws._media.filter(
+    (m) => !(m.range && m.range.tl && m.range.tl.nativeCol === anchor.tl.nativeCol)
+  );
+  if (imageId !== null) {
+    ws.addImage(imageId, anchor);
+  }
 }
 
 async function generateSotWorkbook(data, templateArrayBuffer, logo) {
@@ -271,12 +283,12 @@ async function generateSotWorkbook(data, templateArrayBuffer, logo) {
     fillActivitySheet(ws, data, i);
   }
 
-  if (logo) {
-    const imageId = workbook.addImage({ buffer: logo.buffer, extension: logo.extension });
-    replaceLogo(hojaDatos, imageId, LOGO_ANCHOR_HOJA_DATOS);
-    for (let i = 0; i < activityCount; i++) {
-      replaceLogo(workbook.getWorksheet(`1. ACT ${i + 1}`), imageId, LOGO_ANCHOR_ACT);
-    }
+  const imageId = logo
+    ? workbook.addImage({ buffer: logo.buffer, extension: logo.extension })
+    : null;
+  replaceCompanyLogo(hojaDatos, imageId, LOGO_ANCHOR_HOJA_DATOS);
+  for (let i = 0; i < activityCount; i++) {
+    replaceCompanyLogo(workbook.getWorksheet(`1. ACT ${i + 1}`), imageId, LOGO_ANCHOR_ACT);
   }
 
   return workbook.xlsx.writeBuffer();
@@ -322,7 +334,7 @@ logoInput.addEventListener("change", (e) => {
   selectedLogoFile = file || null;
   logoNameEl.textContent = selectedLogoFile
     ? selectedLogoFile.name
-    : "Se usará el logo por defecto de la plantilla";
+    : "Sin logo — quedará vacío junto al de Circular HR";
 });
 
 function triggerBlobDownload(bufferOrArray, filename, mime) {
