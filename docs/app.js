@@ -3,14 +3,24 @@
 
 /* ---------- docx parsing (ported from src/lib/docx-parser.ts) ---------- */
 
+// Some Competencia Words use "Gerencia(s)" / "Subgerencia(s)" / "Área(s)"
+// instead of "Gerencia" / "Superintendencia" / "Área" — same fields,
+// different label wording depending on who authored the document.
 const HEADER_LABELS = {
   codigo: "codigo",
   nombre: "nombre",
   version: "version",
   gerencia: "gerencia",
+  "gerencia(s)": "gerencia",
   superintendencia: "superintendencia",
+  subgerencia: "superintendencia",
+  "subgerencia(s)": "superintendencia",
+  subgerencias: "superintendencia",
+  "subgerencias(s)": "superintendencia",
   area: "area",
+  "area(s)": "area",
   "perfil(es)": "perfiles",
+  perfil: "perfiles",
   "fecha de elaboracion": "fecha",
 };
 
@@ -176,6 +186,23 @@ function fillActivitySheet(ws, data, activityIndex) {
   });
 }
 
+// Gerencia / Superintendencia / Área often repeat the same value (e.g. a
+// transversal competencia has all three set to "Transversal"), so dedupe
+// before joining rather than concatenating the same word 2-3 times.
+function buildAreaField(data) {
+  const seen = new Set();
+  const parts = [];
+  for (const raw of [data.gerencia, data.superintendencia, data.area]) {
+    const value = (raw || "").trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    parts.push(value);
+  }
+  return parts.join(" ").toUpperCase();
+}
+
 async function generateSotWorkbook(data, templateArrayBuffer) {
   if (data.activities.length === 0) {
     throw new Error(
@@ -189,10 +216,7 @@ async function generateSotWorkbook(data, templateArrayBuffer) {
   const hojaDatos = workbook.getWorksheet("1. Hoja de datos");
   if (!hojaDatos) throw new Error("La plantilla SOT no tiene la hoja '1. Hoja de datos'.");
   hojaDatos.getCell("D7").value = data.perfiles.toUpperCase();
-  hojaDatos.getCell("D9").value = `${data.gerencia} ${data.superintendencia} ${data.area}`
-    .replace(/\s+/g, " ")
-    .trim()
-    .toUpperCase();
+  hojaDatos.getCell("D9").value = buildAreaField(data);
 
   const templateAct = workbook.getWorksheet("1. ACT 1");
   if (!templateAct) throw new Error("La plantilla SOT no tiene la hoja '1. ACT 1'.");

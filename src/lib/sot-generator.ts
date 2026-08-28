@@ -74,6 +74,23 @@ function fillActivitySheet(ws: ExcelJS.Worksheet, data: CompetenciaData, activit
   });
 }
 
+// Gerencia / Superintendencia / Área often repeat the same value (e.g. a
+// transversal competencia has all three set to "Transversal"), so dedupe
+// before joining rather than concatenating the same word 2-3 times.
+function buildAreaField(data: CompetenciaData): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const raw of [data.gerencia, data.superintendencia, data.area]) {
+    const value = raw.trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    parts.push(value);
+  }
+  return parts.join(" ").toUpperCase();
+}
+
 export async function generateSotWorkbook(data: CompetenciaData): Promise<Buffer> {
   if (data.activities.length === 0) {
     throw new Error(
@@ -87,10 +104,7 @@ export async function generateSotWorkbook(data: CompetenciaData): Promise<Buffer
   const hojaDatos = workbook.getWorksheet("1. Hoja de datos");
   if (!hojaDatos) throw new Error("La plantilla SOT no tiene la hoja '1. Hoja de datos'.");
   hojaDatos.getCell("D7").value = data.perfiles.toUpperCase();
-  hojaDatos.getCell("D9").value = `${data.gerencia} ${data.superintendencia} ${data.area}`
-    .replace(/\s+/g, " ")
-    .trim()
-    .toUpperCase();
+  hojaDatos.getCell("D9").value = buildAreaField(data);
 
   const templateAct = workbook.getWorksheet("1. ACT 1");
   if (!templateAct) throw new Error("La plantilla SOT no tiene la hoja '1. ACT 1'.");

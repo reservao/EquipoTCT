@@ -26,15 +26,25 @@ interface ParsedParagraph {
 type StringField = Exclude<keyof CompetenciaData, "activities">;
 
 // Keys must already be stripped of accents/case, since they are matched
-// against the output of stripAccentsLower().
+// against the output of stripAccentsLower(). Some Competencia Words use
+// "Gerencia(s)" / "Subgerencia(s)" / "Área(s)" instead of "Gerencia" /
+// "Superintendencia" / "Área" — same fields, different label wording
+// depending on who authored the document.
 const HEADER_LABELS: Record<string, StringField> = {
   "codigo": "codigo",
   "nombre": "nombre",
   "version": "version",
   "gerencia": "gerencia",
+  "gerencia(s)": "gerencia",
   "superintendencia": "superintendencia",
+  "subgerencia": "superintendencia",
+  "subgerencia(s)": "superintendencia",
+  "subgerencias": "superintendencia",
+  "subgerencias(s)": "superintendencia",
   "area": "area",
+  "area(s)": "area",
   "perfil(es)": "perfiles",
+  "perfil": "perfiles",
   "fecha de elaboracion": "fecha",
 };
 
