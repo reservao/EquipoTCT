@@ -203,7 +203,28 @@ function buildAreaField(data) {
   return parts.join(" ").toUpperCase();
 }
 
-async function generateSotWorkbook(data, templateArrayBuffer) {
+// Anchors copied from the reference SOT's own drawingN.xml (top-right corner,
+// rows 2-3). "Hoja de datos" keeps its own anchor; every ACT sheet reuses the
+// original "1. ACT 1" anchor, since dynamically added ACT sheets (beyond the
+// 3 pre-built ones) have no anchor of their own to copy.
+const LOGO_ANCHOR_HOJA_DATOS = {
+  tl: { nativeCol: 10, nativeColOff: 504825, nativeRow: 2, nativeRowOff: 21430 },
+  br: { nativeCol: 12, nativeColOff: 330993, nativeRow: 3, nativeRowOff: 259555 },
+  editAs: "oneCell",
+};
+const LOGO_ANCHOR_ACT = {
+  tl: { nativeCol: 11, nativeColOff: 173832, nativeRow: 2, nativeRowOff: 19050 },
+  br: { nativeCol: 12, nativeColOff: 90488, nativeRow: 3, nativeRowOff: 161925 },
+  editAs: "oneCell",
+};
+
+function replaceLogo(ws, imageId, anchor) {
+  if (!ws) return;
+  ws._media = [];
+  ws.addImage(imageId, anchor);
+}
+
+async function generateSotWorkbook(data, templateArrayBuffer, logo) {
   if (data.activities.length === 0) {
     throw new Error(
       "No se encontraron Actividades Clave en el documento. Verifica que el Word tenga la sección 'Actividades Clave y Criterios de Desempeño'."
@@ -250,6 +271,14 @@ async function generateSotWorkbook(data, templateArrayBuffer) {
     fillActivitySheet(ws, data, i);
   }
 
+  if (logo) {
+    const imageId = workbook.addImage({ buffer: logo.buffer, extension: logo.extension });
+    replaceLogo(hojaDatos, imageId, LOGO_ANCHOR_HOJA_DATOS);
+    for (let i = 0; i < activityCount; i++) {
+      replaceLogo(workbook.getWorksheet(`1. ACT ${i + 1}`), imageId, LOGO_ANCHOR_ACT);
+    }
+  }
+
   return workbook.xlsx.writeBuffer();
 }
 
@@ -279,9 +308,22 @@ const resultsListEl = document.getElementById("results-list");
 const downloadAllBtn = document.getElementById("download-all-btn");
 const dropZone = document.getElementById("drop-zone");
 const fileNameEl = document.getElementById("selected-file-name");
+const logoInput = document.getElementById("logo-input");
+const logoNameEl = document.getElementById("selected-logo-name");
 
 let selectedFiles = [];
+let selectedLogoFile = null;
 let results = [];
+
+const LOGO_EXTENSIONS = { "image/png": "png", "image/jpeg": "jpeg" };
+
+logoInput.addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  selectedLogoFile = file || null;
+  logoNameEl.textContent = selectedLogoFile
+    ? selectedLogoFile.name
+    : "Se usará el logo por defecto de la plantilla";
+});
 
 function triggerBlobDownload(bufferOrArray, filename, mime) {
   const blob = new Blob([bufferOrArray], { type: mime });
@@ -395,6 +437,15 @@ async function handleGenerate() {
     }
     const templateBuffer = await templateResponse.arrayBuffer();
 
+    let logo = null;
+    if (selectedLogoFile) {
+      const extension = LOGO_EXTENSIONS[selectedLogoFile.type];
+      if (!extension) {
+        throw new Error("El logo debe ser un archivo PNG o JPG.");
+      }
+      logo = { buffer: await selectedLogoFile.arrayBuffer(), extension };
+    }
+
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
       statusEl.textContent =
@@ -406,7 +457,9 @@ async function handleGenerate() {
         const data = await parseCompetenciaDocx(docxBuffer);
         // Each generation reads (and internally mutates the in-memory model of)
         // the template, so every file gets its own untouched copy of the bytes.
-        const workbookBuffer = await generateSotWorkbook(data, templateBuffer.slice(0));
+        // The logo buffer, however, is only ever read (added once per workbook
+        // via workbook.addImage), so it's safe to share across iterations.
+        const workbookBuffer = await generateSotWorkbook(data, templateBuffer.slice(0), logo);
         const outputFileName = buildOutputFileName(data);
         results.push({ file, status: "done", data, buffer: workbookBuffer, outputFileName });
       } catch (err) {
