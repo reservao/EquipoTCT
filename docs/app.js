@@ -243,30 +243,50 @@ function buildOutputFileName(data) {
 
 /* ---------- UI wiring ---------- */
 
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 const fileInput = document.getElementById("file-input");
 const generateBtn = document.getElementById("generate-btn");
 const statusEl = document.getElementById("status");
 const errorEl = document.getElementById("error");
-const summaryEl = document.getElementById("summary");
-const summaryBodyEl = document.getElementById("summary-body");
-const downloadBtn = document.getElementById("download-btn");
+const resultsEl = document.getElementById("results");
+const resultsHeadingEl = document.getElementById("results-heading");
+const resultsListEl = document.getElementById("results-list");
+const downloadAllBtn = document.getElementById("download-all-btn");
 const dropZone = document.getElementById("drop-zone");
 const fileNameEl = document.getElementById("selected-file-name");
 
-let selectedFile = null;
-let generatedBuffer = null;
-let generatedFileName = null;
+let selectedFiles = [];
+let results = [];
 
-function setSelectedFile(file) {
-  selectedFile = file || null;
-  fileNameEl.textContent = selectedFile ? selectedFile.name : "Ningún archivo seleccionado";
-  generateBtn.disabled = !selectedFile;
-  summaryEl.hidden = true;
+function triggerBlobDownload(bufferOrArray, filename, mime) {
+  const blob = new Blob([bufferOrArray], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function setSelectedFiles(fileList) {
+  selectedFiles = fileList ? Array.from(fileList) : [];
+  if (selectedFiles.length === 0) {
+    fileNameEl.textContent = "Ningún archivo seleccionado";
+  } else if (selectedFiles.length === 1) {
+    fileNameEl.textContent = selectedFiles[0].name;
+  } else {
+    fileNameEl.textContent = `${selectedFiles.length} archivos seleccionados`;
+  }
+  generateBtn.disabled = selectedFiles.length === 0;
+  resultsEl.hidden = true;
   errorEl.hidden = true;
 }
 
 fileInput.addEventListener("change", (e) => {
-  setSelectedFile(e.target.files && e.target.files[0]);
+  setSelectedFiles(e.target.files);
 });
 
 ["dragover", "dragenter"].forEach((evt) => {
@@ -282,110 +302,134 @@ fileInput.addEventListener("change", (e) => {
   });
 });
 dropZone.addEventListener("drop", (e) => {
-  const file = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (file) setSelectedFile(file);
+  setSelectedFiles(e.dataTransfer.files);
 });
 
-function renderSummary(data) {
-  const rows = [
-    ["Competencia", data.nombre || "—"],
-    ["Perfil(es)", data.perfiles || "—"],
-    [
-      "Gerencia / Superintendencia / Área",
-      [data.gerencia, data.superintendencia, data.area].filter(Boolean).join(" / ") || "—",
-    ],
-    ["Código", isPlaceholderCodigo(data.codigo) ? "—" : data.codigo],
-  ];
+function renderResults() {
+  resultsListEl.replaceChildren();
+  let successCount = 0;
 
-  const dl = document.createElement("dl");
-  dl.className = "summary-grid";
-  for (const [label, value] of rows) {
-    const dt = document.createElement("dt");
-    dt.textContent = label;
-    const dd = document.createElement("dd");
-    dd.textContent = value;
-    dl.appendChild(dt);
-    dl.appendChild(dd);
+  for (const r of results) {
+    const li = document.createElement("li");
+    li.className = "result-row";
+
+    const header = document.createElement("div");
+    header.className = "result-header";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "result-name";
+    nameEl.textContent = r.file.name;
+
+    const badge = document.createElement("span");
+    badge.className = `badge ${r.status === "done" ? "badge-ok" : "badge-error"}`;
+    badge.textContent = r.status === "done" ? "Generado" : "Error";
+
+    header.appendChild(nameEl);
+    header.appendChild(badge);
+    li.appendChild(header);
+
+    if (r.status === "done") {
+      successCount++;
+      const meta = document.createElement("div");
+      meta.className = "result-meta";
+      const activityCount = r.data.activities.length;
+      meta.textContent = `${r.data.nombre || "—"} · ${activityCount} actividad${activityCount === 1 ? "" : "es"} clave`;
+      li.appendChild(meta);
+
+      const dlBtn = document.createElement("button");
+      dlBtn.className = "download-small";
+      dlBtn.textContent = `Descargar ${r.outputFileName}`;
+      dlBtn.addEventListener("click", () => triggerBlobDownload(r.buffer, r.outputFileName, XLSX_MIME));
+      li.appendChild(dlBtn);
+    } else {
+      const errEl = document.createElement("div");
+      errEl.className = "result-error";
+      errEl.textContent = r.error;
+      li.appendChild(errEl);
+    }
+
+    resultsListEl.appendChild(li);
   }
 
-  const heading = document.createElement("h3");
-  heading.className = "activities-heading";
-  heading.textContent = `Actividades Clave (${data.activities.length})`;
-
-  const ul = document.createElement("ul");
-  ul.className = "activities-list";
-  data.activities.forEach((a, i) => {
-    const li = document.createElement("li");
-    const strong = document.createElement("strong");
-    strong.textContent = `${i + 1}. ${a.title}`;
-    const span = document.createElement("span");
-    span.textContent = ` (${a.criterios.length} criterio${a.criterios.length === 1 ? "" : "s"} de desempeño)`;
-    li.appendChild(strong);
-    li.appendChild(span);
-    ul.appendChild(li);
-  });
-
-  summaryBodyEl.replaceChildren(dl, heading, ul);
-  summaryEl.hidden = false;
+  resultsHeadingEl.textContent =
+    results.length === 1 ? "Resultado" : `Resultados (${successCount}/${results.length} generados)`;
+  downloadAllBtn.hidden = successCount === 0;
+  resultsEl.hidden = false;
 }
 
 async function handleGenerate() {
-  if (!selectedFile) return;
+  if (selectedFiles.length === 0) return;
   errorEl.hidden = true;
-  summaryEl.hidden = true;
+  resultsEl.hidden = true;
   generateBtn.disabled = true;
-  statusEl.textContent = "Generando…";
-  statusEl.hidden = false;
+  results = [];
 
   try {
-    const [docxBuffer, templateResponse] = await Promise.all([
-      selectedFile.arrayBuffer(),
-      fetch("assets/sot-template.xlsx"),
-    ]);
+    const templateResponse = await fetch("assets/sot-template.xlsx");
     if (!templateResponse.ok) {
       throw new Error("No se pudo cargar la plantilla del SOT.");
     }
     const templateBuffer = await templateResponse.arrayBuffer();
 
-    const data = await parseCompetenciaDocx(docxBuffer);
-    const workbookBuffer = await generateSotWorkbook(data, templateBuffer);
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      statusEl.textContent =
+        selectedFiles.length > 1 ? `Generando ${i + 1}/${selectedFiles.length}: ${file.name}` : "Generando…";
+      statusEl.hidden = false;
 
-    generatedBuffer = workbookBuffer;
-    generatedFileName = buildOutputFileName(data);
+      try {
+        const docxBuffer = await file.arrayBuffer();
+        const data = await parseCompetenciaDocx(docxBuffer);
+        // Each generation reads (and internally mutates the in-memory model of)
+        // the template, so every file gets its own untouched copy of the bytes.
+        const workbookBuffer = await generateSotWorkbook(data, templateBuffer.slice(0));
+        const outputFileName = buildOutputFileName(data);
+        results.push({ file, status: "done", data, buffer: workbookBuffer, outputFileName });
+      } catch (err) {
+        results.push({
+          file,
+          status: "error",
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
-    renderSummary(data);
-    downloadBtn.textContent = `Descargar ${generatedFileName}`;
-    downloadBtn.hidden = false;
+    renderResults();
   } catch (err) {
     errorEl.textContent = err instanceof Error ? err.message : String(err);
     errorEl.hidden = false;
-    downloadBtn.hidden = true;
   } finally {
     statusEl.hidden = true;
     generateBtn.disabled = false;
   }
 }
 
-function handleDownload() {
-  if (!generatedBuffer || !generatedFileName) return;
-  try {
-    const blob = new Blob([generatedBuffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = generatedFileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch (err) {
-    console.error("download failed", err);
-    errorEl.textContent = "No se pudo descargar el archivo: " + (err instanceof Error ? err.message : String(err));
-    errorEl.hidden = false;
+async function handleDownloadAll() {
+  const successes = results.filter((r) => r.status === "done");
+  if (successes.length === 0) return;
+
+  if (successes.length === 1) {
+    const r = successes[0];
+    triggerBlobDownload(r.buffer, r.outputFileName, XLSX_MIME);
+    return;
   }
+
+  const zip = new JSZip();
+  const usedNames = new Set();
+  for (const r of successes) {
+    let name = r.outputFileName;
+    if (usedNames.has(name)) {
+      const base = name.replace(/\.xlsx$/, "");
+      let n = 2;
+      while (usedNames.has(`${base}_${n}.xlsx`)) n++;
+      name = `${base}_${n}.xlsx`;
+    }
+    usedNames.add(name);
+    zip.file(name, r.buffer);
+  }
+  const zipBuffer = await zip.generateAsync({ type: "arraybuffer" });
+  triggerBlobDownload(zipBuffer, "SOTs.zip", "application/zip");
 }
 
 generateBtn.addEventListener("click", handleGenerate);
-downloadBtn.addEventListener("click", handleDownload);
+downloadAllBtn.addEventListener("click", handleDownloadAll);
