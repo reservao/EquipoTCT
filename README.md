@@ -1,36 +1,25 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Equipo TCT — Plataforma
 
-## Getting Started
+Plataforma del equipo de Talentos y Capacidades del Trabajo (TCT) de Circular HR.
 
-First, run the development server:
+## Módulo SOT — Set de Observación en Terreno
+
+Convierte el Word de una Competencia (UCL) en el Excel del SOT correspondiente. Sube uno o varios documentos `.docx`, opcionalmente el logo de la empresa, y descarga los Excel generados (individualmente o todos juntos en un `.zip`).
+
+Todo el procesamiento ocurre en el navegador — ningún archivo se sube a un servidor.
+
+- **App:** [reservao.github.io/EquipoTCT](https://reservao.github.io/EquipoTCT/)
+- **Código:** `docs/` (HTML/CSS/JS estático, sin build) + `docs/vendor/` (jszip, exceljs vendorizados) + `docs/assets/sot-template.xlsx` (plantilla base del SOT)
+
+## Pruebas
+
+Los scripts en `scripts/` usan Playwright para probar la app estática end-to-end:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npx playwright install chromium   # si no está ya instalado
+node scripts/e2e-test.mjs <competencia.docx>[,<otra.docx>,...] <output-dir> [base-url]
+node scripts/e2e-logo-test.mjs <competencia.docx> <logo.png> <output-dir> [base-url]
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Por defecto apuntan a `http://localhost:8899/index.html`; sirve `docs/` con cualquier servidor estático (ej. `python3 -m http.server 8899 -d docs`) antes de correrlos.
