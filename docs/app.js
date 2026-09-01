@@ -5,7 +5,9 @@
 
 // Some Competencia Words use "Gerencia(s)" / "Subgerencia(s)" / "Área(s)"
 // instead of "Gerencia" / "Superintendencia" / "Área" — same fields,
-// different label wording depending on who authored the document.
+// different label wording depending on who authored the document. Others
+// (a different faena's template) skip that taxonomy entirely and use
+// "Sector" / "Proceso(s)" / "Subproceso(s)" instead — see buildAreaField.
 const HEADER_LABELS = {
   codigo: "codigo",
   nombre: "nombre",
@@ -19,6 +21,12 @@ const HEADER_LABELS = {
   "subgerencias(s)": "superintendencia",
   area: "area",
   "area(s)": "area",
+  sector: "sector",
+  "proceso(s)": "proceso",
+  proceso: "proceso",
+  "subproceso(s)": "subproceso",
+  "subproceso (s)": "subproceso",
+  subproceso: "subproceso",
   "perfil(es)": "perfiles",
   perfil: "perfiles",
   "fecha de elaboracion": "fecha",
@@ -68,6 +76,9 @@ async function parseCompetenciaDocx(arrayBuffer) {
     gerencia: "",
     superintendencia: "",
     area: "",
+    sector: "",
+    proceso: "",
+    subproceso: "",
     perfiles: "",
     fecha: "",
     activities: [],
@@ -189,10 +200,10 @@ function fillActivitySheet(ws, data, activityIndex) {
 // Gerencia / Superintendencia / Área often repeat the same value (e.g. a
 // transversal competencia has all three set to "Transversal"), so dedupe
 // before joining rather than concatenating the same word 2-3 times.
-function buildAreaField(data) {
+function dedupeJoin(values) {
   const seen = new Set();
   const parts = [];
-  for (const raw of [data.gerencia, data.superintendencia, data.area]) {
+  for (const raw of values) {
     const value = (raw || "").trim();
     if (!value) continue;
     const key = value.toLowerCase();
@@ -201,6 +212,16 @@ function buildAreaField(data) {
     parts.push(value);
   }
   return parts.join(" ").toUpperCase();
+}
+
+// Some competencias use Gerencia/Superintendencia/Área; others (a different
+// faena's template) use Sector/Proceso(s)/Subproceso(s) instead and never
+// fill the first set at all. Fall back to the second set when the first is
+// entirely empty, so the ÁREA field isn't left blank either way.
+function buildAreaField(data) {
+  const primary = dedupeJoin([data.gerencia, data.superintendencia, data.area]);
+  if (primary) return primary;
+  return dedupeJoin([data.sector, data.proceso, data.subproceso]);
 }
 
 // Each sheet in the template carries two logos: Circular HR fixed on the
