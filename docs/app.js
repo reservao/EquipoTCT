@@ -142,9 +142,26 @@ function unmergeRow(ws, row) {
   }
 }
 
+function columnLetterToNumber(letter) {
+  return letter.charCodeAt(0) - 64;
+}
+
 function mergeRow(ws, row) {
   for (const [a, b] of MERGE_COLUMN_PAIRS) {
+    const fromCol = columnLetterToNumber(a);
+    const toCol = columnLetterToNumber(b);
+    // ExcelJS's mergeCells() overwrites every cell in the range with the
+    // anchor cell's style, which would erase the distinct per-column
+    // borders these cells carry (e.g. the box's right-edge border) — so
+    // capture them first and reapply after merging.
+    const styles = [];
+    for (let col = fromCol; col <= toCol; col++) {
+      styles.push(ws.getRow(row).getCell(col).style);
+    }
     ws.mergeCells(`${a}${row}:${b}${row}`);
+    styles.forEach((style, idx) => {
+      ws.getRow(row).getCell(fromCol + idx).style = style;
+    });
   }
 }
 
@@ -159,13 +176,23 @@ function setCriterioRowCount(ws, desiredCount) {
   if (diff < 0) {
     const removeFrom = BASE_CRITERIO_ROW + desiredCount;
     const removeCount = -diff;
+
+    // The template only closes the criterio box's bottom border on its
+    // final row — middle rows rely on the row below for the dividing line —
+    // so that border must move onto the new last visible row before the
+    // rest get hidden, otherwise the box is left open at the bottom.
+    const lastTemplateRow = BASE_CRITERIO_ROW + BASE_CRITERIO_COUNT - 1;
+    const newLastRow = removeFrom - 1;
+    ws.getRow(lastTemplateRow).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      ws.getRow(newLastRow).getCell(colNumber).border = cell.border;
+    });
+
     for (let r = removeFrom; r < removeFrom + removeCount; r++) {
       unmergeRow(ws, r);
       const row = ws.getRow(r);
       row.eachCell({ includeEmpty: true }, (cell) => {
         cell.value = null;
       });
-      row.height = 0;
       row.hidden = true;
     }
   } else {
@@ -274,7 +301,6 @@ async function generateSotWorkbook(data, templateArrayBuffer, logo) {
 
   const templateAct = workbook.getWorksheet("1. ACT 1");
   if (!templateAct) throw new Error("La plantilla SOT no tiene la hoja '1. ACT 1'.");
-  const pristineActModel = JSON.parse(JSON.stringify(templateAct.model));
 
   const prebuiltActNames = ["1. ACT 1", "1. ACT 2", "1. ACT 3"];
   const activityCount = data.activities.length;
@@ -284,18 +310,32 @@ async function generateSotWorkbook(data, templateArrayBuffer, logo) {
     if (ws) workbook.removeWorksheet(ws.id);
   }
 
+  // Extra ACT sheets (beyond the 3 pre-built ones) are cloned by copying
+  // each cell's value/style straight from "1. ACT 1", cell by cell. An
+  // earlier version cloned through the worksheet's `.model` getter/setter,
+  // but that round-trip silently drops some per-cell border styles (a
+  // library quirk), leaving cloned sheets with broken-looking table borders
+  // — most visibly around the Circular HR logo in the header.
+  const templateMerges = templateAct.model.merges || [];
   for (let i = prebuiltActNames.length; i < activityCount; i++) {
-    const name = `1. ACT ${i + 1}`;
-    const clone = workbook.addWorksheet(name);
-    clone.model = Object.assign({}, pristineActModel, { name });
-    // ExcelJS's worksheet model getter emits merges under `merges`, but its
-    // setter reads them back under `mergeCells` — an asymmetry in the
-    // library itself — so the assignment above silently drops them and they
-    // must be re-applied explicitly.
-    const merges = pristineActModel.merges || [];
-    for (const range of merges) {
+    const clone = workbook.addWorksheet(`1. ACT ${i + 1}`);
+    templateAct.columns.forEach((col, idx) => {
+      if (col.width != null) clone.getColumn(idx + 1).width = col.width;
+    });
+    // Merging first matters: ExcelJS's mergeCells() overwrites every cell in
+    // the range with the anchor cell's style, so merging after copying
+    // styles would erase the per-cell border differences the template
+    // relies on for its box outlines.
+    for (const range of templateMerges) {
       clone.mergeCells(range);
     }
+    templateAct.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+      const newRow = clone.getRow(rowNumber);
+      newRow.height = row.height;
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        newRow.getCell(colNumber).style = cell.style;
+      });
+    });
   }
 
   for (let i = 0; i < activityCount; i++) {
@@ -311,6 +351,12 @@ async function generateSotWorkbook(data, templateArrayBuffer, logo) {
   for (let i = 0; i < activityCount; i++) {
     replaceCompanyLogo(workbook.getWorksheet(`1. ACT ${i + 1}`), imageId, LOGO_ANCHOR_ACT);
   }
+
+  // The template's own bookViews carries a stale activeTab left over from
+  // whoever last edited it in Excel, so every generated SOT opened on
+  // whichever sheet they happened to have selected. Force it back to the
+  // first sheet so the file always opens on "1. Hoja de datos".
+  workbook.views = [{ activeTab: 0, firstSheet: 0 }];
 
   return workbook.xlsx.writeBuffer();
 }
