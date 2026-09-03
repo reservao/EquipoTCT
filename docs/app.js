@@ -316,15 +316,13 @@ async function generateSotWorkbook(data, templateArrayBuffer, logo) {
 }
 
 function buildOutputFileName(data) {
-  const base = data.nombre || "SOT";
-  const slug = base
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
+  const base = data.nombre || "";
+  const clean = base
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
     .slice(0, 80);
-  return `SOT_${slug || "competencia"}.xlsx`;
+  return `SOT ${clean || "competencia"}.xlsx`;
 }
 
 /* ---------- UI wiring ---------- */
