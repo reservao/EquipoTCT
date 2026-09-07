@@ -398,6 +398,12 @@ async function generateSotWorkbook(data, templateArrayBuffer, logo) {
 
   for (let i = prebuiltActNames.length; i < activityCount; i++) {
     const clone = workbook.addWorksheet(`1. ACT ${i + 1}`);
+    // A brand new worksheet defaults to portrait/100%-scale/no-print-area
+    // instead of "1. ACT 1"'s landscape/65%-scale page setup and its 80%
+    // page-break-preview view, which is what made cloned sheets look
+    // stretched/mis-scaled compared to the pre-built ones.
+    clone.pageSetup = cloneStyle(templateAct.pageSetup);
+    clone.views = cloneStyle(templateAct.views);
     templateAct.columns.forEach((col, idx) => {
       if (col.width != null) clone.getColumn(idx + 1).width = col.width;
     });
