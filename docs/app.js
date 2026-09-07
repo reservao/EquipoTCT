@@ -130,7 +130,6 @@ function isPlaceholderCodigo(codigo) {
 /* ---------- SOT generation (ported from src/lib/sot-generator.ts) ---------- */
 
 const BASE_CRITERIO_ROW = 16;
-const BASE_CRITERIO_COUNT = 6;
 const MERGE_COLUMN_PAIRS = [
   ["C", "E"],
   ["I", "M"],
@@ -146,6 +145,16 @@ function columnLetterToNumber(letter) {
   return letter.charCodeAt(0) - 64;
 }
 
+// ExcelJS shares one style object across every cell that happens to have the
+// same formatting — even across different sheets — and mutating a cell's
+// `.border` (rather than replacing the whole `.style`) edits that shared
+// object in place, silently changing every other cell that looked the same.
+// Deep-cloning before storing/assigning avoids aliasing into that shared
+// object.
+function cloneStyle(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 function mergeRow(ws, row) {
   for (const [a, b] of MERGE_COLUMN_PAIRS) {
     const fromCol = columnLetterToNumber(a);
@@ -153,10 +162,22 @@ function mergeRow(ws, row) {
     // ExcelJS's mergeCells() overwrites every cell in the range with the
     // anchor cell's style, which would erase the distinct per-column
     // borders these cells carry (e.g. the box's right-edge border) — so
-    // capture them first and reapply after merging.
+    // capture a clone of each one first (see cloneStyle) and reapply after
+    // merging, via a full `.style=` replacement so the restored value gets
+    // its own independent style slot instead of re-sharing the anchor's.
     const styles = [];
     for (let col = fromCol; col <= toCol; col++) {
-      styles.push(ws.getRow(row).getCell(col).style);
+      styles.push(cloneStyle(ws.getRow(row).getCell(col).style));
+    }
+    // Force-unmerge first (ignoring the error if it wasn't merged) rather
+    // than skipping rows duplicateRow() already left merged: that shifted
+    // merge state satisfies mergeCells()'s own "already merged" check and
+    // the in-memory model, but silently fails to survive writeBuffer() for
+    // some rows — merging fresh here is what actually makes it into the file.
+    try {
+      ws.unMergeCells(`${a}${row}:${b}${row}`);
+    } catch (err) {
+      // wasn't merged; nothing to undo
     }
     ws.mergeCells(`${a}${row}:${b}${row}`);
     styles.forEach((style, idx) => {
@@ -169,8 +190,15 @@ function mergeRow(ws, row) {
 // through the sheet's last row (a library quirk), which is exactly our case
 // when shrinking the criterios block since it always sits at the bottom of
 // the sheet. So excess rows are cleared and hidden instead of removed.
+//
+// The template's own row count for this block isn't consistent across
+// sheets either — "1. ACT 3" ships with only 5 criterio rows while "1. ACT
+// 1"/"1. ACT 2" have 6 — so the current count is read from the sheet itself
+// rather than assumed fixed, otherwise a 6th criterio on that sheet lands in
+// a brand new, unstyled row.
 function setCriterioRowCount(ws, desiredCount) {
-  const diff = desiredCount - BASE_CRITERIO_COUNT;
+  const currentCount = ws.rowCount - BASE_CRITERIO_ROW + 1;
+  const diff = desiredCount - currentCount;
   if (diff === 0) return;
 
   if (diff < 0) {
@@ -180,11 +208,17 @@ function setCriterioRowCount(ws, desiredCount) {
     // The template only closes the criterio box's bottom border on its
     // final row — middle rows rely on the row below for the dividing line —
     // so that border must move onto the new last visible row before the
-    // rest get hidden, otherwise the box is left open at the bottom.
-    const lastTemplateRow = BASE_CRITERIO_ROW + BASE_CRITERIO_COUNT - 1;
+    // rest get hidden, otherwise the box is left open at the bottom. Done
+    // via a full `.style=` replacement (see cloneStyle) rather than
+    // `.border=`, which would edit the shared style object in place and
+    // silently repaint every other cell using that same style.
+    const lastTemplateRow = BASE_CRITERIO_ROW + currentCount - 1;
     const newLastRow = removeFrom - 1;
     ws.getRow(lastTemplateRow).eachCell({ includeEmpty: true }, (cell, colNumber) => {
-      ws.getRow(newLastRow).getCell(colNumber).border = cell.border;
+      const target = ws.getRow(newLastRow).getCell(colNumber);
+      const newStyle = cloneStyle(target.style);
+      newStyle.border = cloneStyle(cell.border);
+      target.style = newStyle;
     });
 
     for (let r = removeFrom; r < removeFrom + removeCount; r++) {
@@ -196,10 +230,14 @@ function setCriterioRowCount(ws, desiredCount) {
       row.hidden = true;
     }
   } else {
-    const lastRow = BASE_CRITERIO_ROW + BASE_CRITERIO_COUNT - 1;
-    ws.duplicateRow(lastRow, diff, true);
-    for (let k = 0; k < diff; k++) {
-      mergeRow(ws, lastRow + 1 + k);
+    // Duplicating the first (plain middle-style) row and inserting right
+    // after it pushes every row below — including the closing row, with its
+    // bottom border — further down intact, instead of repeating that
+    // closing border on every newly added row.
+    ws.duplicateRow(BASE_CRITERIO_ROW, diff, true);
+    const newLastRow = BASE_CRITERIO_ROW + desiredCount - 1;
+    for (let r = BASE_CRITERIO_ROW; r <= newLastRow; r++) {
+      mergeRow(ws, r);
     }
   }
 }
