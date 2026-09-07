@@ -242,6 +242,26 @@ function setCriterioRowCount(ws, desiredCount) {
   }
 }
 
+const CRITERIO_TEXT_COLUMNS = ["C", "D", "E"];
+const POINTS_PER_LINE = 15; // Calibri 11's natural single-line row height
+const PIXELS_PER_WIDTH_UNIT = 7; // Excel column-width-unit → pixel, for Calibri 11 (MDW≈7px)
+const AVG_CHAR_WIDTH_PX = 6; // rough average glyph width for Calibri 11
+
+// The criterio cell wraps its text (word wrap is on in the template), but
+// Excel doesn't auto-fit row height for merged cells — a well-known Excel
+// limitation, not something a saved file can opt out of — so the height has
+// to be estimated here from the actual text length and merged column width,
+// instead of just keeping whatever fixed height that row happened to have
+// in the template (which was sized for a completely different document's
+// text).
+function estimateCriterioRowHeight(ws, text) {
+  const widthUnits = CRITERIO_TEXT_COLUMNS.reduce((sum, col) => sum + (ws.getColumn(col).width || 0), 0);
+  const widthPx = widthUnits * PIXELS_PER_WIDTH_UNIT;
+  const charsPerLine = Math.max(10, Math.floor(widthPx / AVG_CHAR_WIDTH_PX));
+  const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
+  return lines * POINTS_PER_LINE + 6;
+}
+
 function fillActivitySheet(ws, data, activityIndex) {
   const activity = data.activities[activityIndex];
 
@@ -259,6 +279,7 @@ function fillActivitySheet(ws, data, activityIndex) {
     ws.getCell(`B${row}`).value = `${activityIndex + 1}.${j + 1}`;
     ws.getCell(`C${row}`).value = criterio;
     ws.getCell(`F${row}`).value = "Encargado Técnico";
+    ws.getRow(row).height = estimateCriterioRowHeight(ws, criterio);
   });
 }
 
