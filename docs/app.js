@@ -268,6 +268,14 @@ const LOGO_ANCHOR_ACT = {
   br: { nativeCol: 3, nativeColOff: 847725, nativeRow: 3, nativeRowOff: 334689 },
   editAs: "oneCell",
 };
+// Cloned ACT sheets (4th activity onward) start out blank, so the fixed
+// Circular HR logo has to be copied over explicitly too — this is "1. ACT
+// 1"'s own anchor for it, reused for the same reason as LOGO_ANCHOR_ACT above.
+const CIRCULAR_LOGO_ANCHOR_ACT = {
+  tl: { nativeCol: 11, nativeColOff: 173832, nativeRow: 2, nativeRowOff: 19050 },
+  br: { nativeCol: 12, nativeColOff: 90488, nativeRow: 3, nativeRowOff: 161925 },
+  editAs: "oneCell",
+};
 
 // Always clears whatever company logo the template shipped with (so a SOT
 // generated without an uploaded logo ends up with that slot empty, not the
@@ -317,6 +325,18 @@ async function generateSotWorkbook(data, templateArrayBuffer, logo) {
   // library quirk), leaving cloned sheets with broken-looking table borders
   // — most visibly around the Circular HR logo in the header.
   const templateMerges = templateAct.model.merges || [];
+
+  // The clone loop below copies cells and merges but not images, so the
+  // fixed Circular HR logo (unlike the company logo, never re-uploaded per
+  // generation) needs its bytes captured once here and re-added per clone.
+  const circularLogoMedia = templateAct._media.find(
+    (m) => m.range.tl.nativeCol !== LOGO_ANCHOR_ACT.tl.nativeCol
+  );
+  const circularLogoImage = circularLogoMedia ? workbook.getImage(circularLogoMedia.imageId) : null;
+  const circularLogoImageId = circularLogoImage
+    ? workbook.addImage({ buffer: circularLogoImage.buffer, extension: circularLogoImage.extension })
+    : null;
+
   for (let i = prebuiltActNames.length; i < activityCount; i++) {
     const clone = workbook.addWorksheet(`1. ACT ${i + 1}`);
     templateAct.columns.forEach((col, idx) => {
@@ -336,6 +356,9 @@ async function generateSotWorkbook(data, templateArrayBuffer, logo) {
         newRow.getCell(colNumber).style = cell.style;
       });
     });
+    if (circularLogoImageId !== null) {
+      clone.addImage(circularLogoImageId, CIRCULAR_LOGO_ANCHOR_ACT);
+    }
   }
 
   for (let i = 0; i < activityCount; i++) {
