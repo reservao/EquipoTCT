@@ -24,11 +24,16 @@
 //   - Sheet protection, autoFilters, hidden rows/columns, and cell
 //     notes/comments on every sheet: this is a plain data-import template
 //     with no reason to lock, filter, hide, or annotate anything.
-//   - The background fill on every data row (rows 2+) in every sheet: the
-//     reference file highlights some lookup/classification columns with a
-//     tinted fill all the way down, which just looks like stray "painted"
-//     cells once the example data is gone. Header row (row 1) styling is
-//     left alone.
+//   - The background fill on every cell in every sheet, header row
+//     included: the reference file highlights some lookup/classification
+//     columns with a tinted fill all the way down (stray "painted" cells
+//     once the example data is gone), and even the header banner color
+//     reads as more "painted table" than a plain import template needs.
+//   - Cached formula results: a formula cell (e.g. the email-from-ID
+//     pattern extended down thousands of rows) keeps its formula, but its
+//     cached "result" is whatever the original example data computed to —
+//     invisible once Excel recalculates on open, but still real leftover
+//     content sitting in the file until then.
 //   - Custom row heights on CARGA INSTRUMENTO PRUEBA (rows 2+): the
 //     reference file has wildly inconsistent per-row heights left over
 //     from its own example content; reset to the sheet default so the
@@ -108,8 +113,21 @@ workbook.eachSheet((ws) => {
       // fabricate an empty legacy VML comment shape for it (verbose XML,
       // one shape per cell), ballooning the file instead of cleaning it.
       if (cell.note) cell.note = undefined;
-      if (rowNumber > 1 && cell.fill && cell.fill.type) {
+      // Every fill goes, header row included — a plain template with no
+      // color anywhere.
+      if (cell.fill && cell.fill.type) {
         cell.fill = { type: "pattern", pattern: "none" };
+      }
+      // A formula cell keeps its formula (template scaffolding, e.g. an
+      // email-from-ID pattern extended down thousands of rows) but its
+      // cached "result" is whatever the original example data computed to
+      // — invisible once Excel recalculates on open, but still real
+      // leftover content sitting in the file until then. Drop just the
+      // result, keeping ref/shareType intact so shared-formula groups
+      // don't break.
+      if (typeof cell.value === "object" && cell.value !== null && "formula" in cell.value) {
+        const { result, ...rest } = cell.value;
+        cell.value = rest;
       }
     });
     if (ws.name === "CARGA INSTRUMENTO PRUEBA" && rowNumber > 1) {
