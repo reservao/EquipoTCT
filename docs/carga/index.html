@@ -386,10 +386,10 @@
   </header>
 
   <h1>Carga Competencias y Pruebas</h1>
-  <p class="lede">Sube los Word de Competencias (UCL) y genera la planilla de carga lista para importar, con las hojas "CARGA COMPETENCIA" e "CARGA INSTRUMENTO PRUEBA" completadas.</p>
+  <p class="lede">Sube los Word de Competencias (UCL) y de Pruebas (TCO) y genera la planilla de carga lista para importar, con las hojas "CARGA COMPETENCIA" e "CARGA INSTRUMENTO PRUEBA" completadas.</p>
 
   <div class="steps">
-    <div class="step"><div class="step-num">01</div><div class="step-label">Sube uno o varios Word de Competencias</div></div>
+    <div class="step"><div class="step-num">01</div><div class="step-label">Sube Word de Competencias y/o Pruebas</div></div>
     <div class="step"><div class="step-num">02</div><div class="step-label">Genera la planilla</div></div>
     <div class="step"><div class="step-num">03</div><div class="step-label">Descarga el Excel</div></div>
   </div>
@@ -406,9 +406,27 @@
       <div class="selected-file" id="selected-competencia-name">Ningún archivo seleccionado</div>
     </div>
     <div class="note-box">
-      Por ahora solo se procesan competencias <strong>FUNCIONALES</strong> (el mismo formato de Word usado en SOT). Las conductuales y la carga de pruebas (exámenes) se agregan más adelante.
+      Por ahora solo se procesan competencias <strong>FUNCIONALES</strong> (el mismo formato de Word usado en SOT). Las competencias conductuales se agregan más adelante.
     </div>
+  </div>
 
+  <div class="card">
+    <h2 class="card-title">Pruebas / TCO (Word)</h2>
+    <div class="drop-zone" id="prueba-drop-zone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <p>Arrastra aquí uno o varios Word (.docx) de Pruebas (TCO), o elige los archivos</p>
+      <label class="file-picker">
+        Elegir archivos
+        <input type="file" id="prueba-input" accept=".docx" multiple />
+      </label>
+      <div class="selected-file" id="selected-prueba-name">Ningún archivo seleccionado</div>
+    </div>
+    <div class="note-box">
+      La respuesta correcta se detecta automáticamente comparando el formato (color, negrita, tipografía) de cada alternativa contra sus hermanas: la que se distingue del resto es la correcta. Si ninguna alternativa se distingue con claridad, o la pregunta usa un formato de combinaciones (I, II, III…) con más de 6 opciones, esa pregunta queda sin respuesta marcada para completarla manualmente en el Excel.
+    </div>
+  </div>
+
+  <div class="card">
     <div class="actions">
       <button class="primary" id="generate-btn" disabled>Generar planilla</button>
       <span id="status" hidden></span>
@@ -426,13 +444,14 @@
   </div>
 
   <footer class="note">
-    Todo el procesamiento ocurre en tu navegador — el Word no se sube a ningún servidor. Los campos que no vienen literalmente en el Word (como el código de la competencia) quedan en blanco para completarlos manualmente.
+    Todo el procesamiento ocurre en tu navegador — el Word no se sube a ningún servidor. Los campos que no vienen literalmente en el Word (como el código de la competencia o de la prueba) quedan en blanco para completarlos manualmente.
   </footer>
 </div>
 
 <script src="../vendor/jszip.min.js"></script>
 <script src="../vendor/exceljs.min.js"></script>
 <script src="../competencia-parser.js"></script>
+<script src="../prueba-parser.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

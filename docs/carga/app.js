@@ -1,4 +1,4 @@
-/* global JSZip, ExcelJS, parseCompetenciaDocx, isPlaceholderCodigo */
+/* global JSZip, ExcelJS, parseCompetenciaDocx, isPlaceholderCodigo, parsePruebaDocx */
 "use strict";
 
 /* ---------- Carga Competencia row building ---------- */
@@ -32,19 +32,65 @@ function buildCompetenciaRows(data) {
   return rows;
 }
 
-async function generatePlanilla(templateArrayBuffer, allRows) {
+/* ---------- Carga Instrumento Prueba row building ---------- */
+
+// The documents always use fixed multiple-choice questions with a single
+// correct alternative, so these are constant literal values, same as the
+// reference planilla's own example rows.
+const TIPO_PREGUNTA = "Alternativas";
+const TIPO_RESPUESTA = "Alternativa Default";
+const MAX_ALTERNATIVAS = 6;
+
+// A row is emitted for every question so the literal fields (nombre,
+// pregunta, tipo) don't need to be typed by hand -- but when the correct
+// answer couldn't be determined (or a question uses a combination format
+// with more than 6 options), the RESPUESTA_* columns are left blank rather
+// than guessed, per the same "blank if not literal" rule as competencias.
+function buildPruebaRows(data) {
+  const nombre = data.nombre || "";
+  return data.questions.map((q, idx) => {
+    const pregunta = `${idx + 1}.\t${q.pregunta}`;
+    const row = [
+      "", // CODIGO PRUEBA/ENCUESTA -- not present in any sample document
+      nombre,
+      TIPO_PREGUNTA,
+      pregunta,
+      "", // IMAGEN_PREGUNTA -- image handling not supported yet
+      TIPO_RESPUESTA,
+    ];
+    for (let i = 0; i < MAX_ALTERNATIVAS; i++) {
+      row.push(q.needsReview ? "" : q.alternativas[i] || "");
+    }
+    row.push(q.needsReview ? "" : q.correctaIndex + 1);
+    return row;
+  });
+}
+
+async function generatePlanilla(templateArrayBuffer, competenciaRows, pruebaRows) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(templateArrayBuffer);
 
-  const ws = workbook.getWorksheet("CARGA COMPETENCIA");
-  if (!ws) throw new Error("La plantilla no tiene la hoja 'CARGA COMPETENCIA'.");
-
-  allRows.forEach((row, idx) => {
-    const excelRow = ws.getRow(idx + 2);
-    row.forEach((value, colIdx) => {
-      excelRow.getCell(colIdx + 1).value = value || null;
+  if (competenciaRows.length > 0) {
+    const ws = workbook.getWorksheet("CARGA COMPETENCIA");
+    if (!ws) throw new Error("La plantilla no tiene la hoja 'CARGA COMPETENCIA'.");
+    competenciaRows.forEach((row, idx) => {
+      const excelRow = ws.getRow(idx + 2);
+      row.forEach((value, colIdx) => {
+        excelRow.getCell(colIdx + 1).value = value || null;
+      });
     });
-  });
+  }
+
+  if (pruebaRows.length > 0) {
+    const ws = workbook.getWorksheet("CARGA INSTRUMENTO PRUEBA");
+    if (!ws) throw new Error("La plantilla no tiene la hoja 'CARGA INSTRUMENTO PRUEBA'.");
+    pruebaRows.forEach((row, idx) => {
+      const excelRow = ws.getRow(idx + 2);
+      row.forEach((value, colIdx) => {
+        excelRow.getCell(colIdx + 1).value = value || null;
+      });
+    });
+  }
 
   return workbook.xlsx.writeBuffer();
 }
@@ -55,6 +101,7 @@ const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 const TEMPLATE_URL = "assets/planilla-carga-template.xlsx";
 
 const competenciaInput = document.getElementById("competencia-input");
+const pruebaInput = document.getElementById("prueba-input");
 const generateBtn = document.getElementById("generate-btn");
 const statusEl = document.getElementById("status");
 const errorEl = document.getElementById("error");
@@ -62,10 +109,13 @@ const resultsEl = document.getElementById("results");
 const resultsHeadingEl = document.getElementById("results-heading");
 const resultsListEl = document.getElementById("results-list");
 const downloadBtn = document.getElementById("download-btn");
-const dropZone = document.getElementById("competencia-drop-zone");
-const fileNameEl = document.getElementById("selected-competencia-name");
+const competenciaDropZone = document.getElementById("competencia-drop-zone");
+const pruebaDropZone = document.getElementById("prueba-drop-zone");
+const competenciaFileNameEl = document.getElementById("selected-competencia-name");
+const pruebaFileNameEl = document.getElementById("selected-prueba-name");
 
-let selectedFiles = [];
+let selectedCompetenciaFiles = [];
+let selectedPruebaFiles = [];
 let outputBuffer = null;
 
 function triggerBlobDownload(bufferOrArray, filename, mime) {
@@ -80,32 +130,58 @@ function triggerBlobDownload(bufferOrArray, filename, mime) {
   URL.revokeObjectURL(url);
 }
 
-function setSelectedFiles(fileList) {
-  selectedFiles = Array.from(fileList).filter((f) => f.name.toLowerCase().endsWith(".docx"));
-  if (selectedFiles.length === 0) {
-    fileNameEl.textContent = "Ningún archivo seleccionado";
-  } else if (selectedFiles.length === 1) {
-    fileNameEl.textContent = selectedFiles[0].name;
+function describeSelection(files) {
+  if (files.length === 0) return "Ningún archivo seleccionado";
+  if (files.length === 1) return files[0].name;
+  return `${files.length} archivos seleccionados`;
+}
+
+function setSelectedFiles(fileList, kind) {
+  const files = Array.from(fileList).filter((f) => f.name.toLowerCase().endsWith(".docx"));
+  if (kind === "competencia") {
+    selectedCompetenciaFiles = files;
+    competenciaFileNameEl.textContent = describeSelection(files);
   } else {
-    fileNameEl.textContent = `${selectedFiles.length} archivos seleccionados`;
+    selectedPruebaFiles = files;
+    pruebaFileNameEl.textContent = describeSelection(files);
   }
-  generateBtn.disabled = selectedFiles.length === 0;
+  generateBtn.disabled = selectedCompetenciaFiles.length === 0 && selectedPruebaFiles.length === 0;
   resultsEl.hidden = true;
   errorEl.hidden = true;
   outputBuffer = null;
 }
 
-competenciaInput.addEventListener("change", () => setSelectedFiles(competenciaInput.files));
+competenciaInput.addEventListener("change", () => setSelectedFiles(competenciaInput.files, "competencia"));
+pruebaInput.addEventListener("change", () => setSelectedFiles(pruebaInput.files, "prueba"));
 
-["dragover", "dragleave", "drop"].forEach((evt) => {
-  dropZone.addEventListener(evt, (e) => {
-    e.preventDefault();
-    dropZone.classList.toggle("is-dragover", evt === "dragover");
+[
+  [competenciaDropZone, "competencia"],
+  [pruebaDropZone, "prueba"],
+].forEach(([zone, kind]) => {
+  ["dragover", "dragleave", "drop"].forEach((evt) => {
+    zone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      zone.classList.toggle("is-dragover", evt === "dragover");
+    });
+  });
+  zone.addEventListener("drop", (e) => {
+    if (e.dataTransfer.files.length) setSelectedFiles(e.dataTransfer.files, kind);
   });
 });
-dropZone.addEventListener("drop", (e) => {
-  if (e.dataTransfer.files.length) setSelectedFiles(e.dataTransfer.files);
-});
+
+function competenciaMeta(data) {
+  return `${data.nombre || "(sin nombre)"} · ${data.activities.length} actividades clave`;
+}
+
+function pruebaMeta(data) {
+  const total = data.questions.length;
+  const needsReview = data.questions.filter((q) => q.needsReview).length;
+  const withImage = data.questions.filter((q) => q.hasImage).length;
+  const parts = [`${data.nombre || "(sin nombre)"}`, `${total} preguntas`];
+  if (needsReview > 0) parts.push(`${needsReview} requieren revisión manual`);
+  if (withImage > 0) parts.push(`${withImage} con imagen (no incluida)`);
+  return parts.join(" · ");
+}
 
 function renderResults(entries) {
   resultsListEl.innerHTML = "";
@@ -118,10 +194,7 @@ function renderResults(entries) {
     li.className = "result-row";
     const badgeClass = entry.status === "ok" ? "badge-ok" : "badge-error";
     const badgeText = entry.status === "ok" ? "OK" : "ERROR";
-    const meta =
-      entry.status === "ok"
-        ? `${entry.data.nombre || "(sin nombre)"} · ${entry.data.activities.length} actividades clave`
-        : "";
+    const meta = entry.status === "ok" ? (entry.kind === "competencia" ? competenciaMeta(entry.data) : pruebaMeta(entry.data)) : "";
     li.innerHTML = `
       <div class="result-header">
         <span class="result-name">${entry.file.name}</span>
@@ -149,7 +222,7 @@ generateBtn.addEventListener("click", async () => {
     const templateArrayBuffer = await fetch(TEMPLATE_URL).then((r) => r.arrayBuffer());
 
     const entries = [];
-    for (const file of selectedFiles) {
+    for (const file of selectedCompetenciaFiles) {
       try {
         const buffer = await file.arrayBuffer();
         const data = await parseCompetenciaDocx(buffer);
@@ -158,16 +231,34 @@ generateBtn.addEventListener("click", async () => {
             "No se encontraron Actividades Clave en el documento. Verifica que el Word tenga la sección 'Actividades Clave y Criterios de Desempeño'."
           );
         }
-        entries.push({ file, status: "ok", data });
+        entries.push({ file, kind: "competencia", status: "ok", data });
       } catch (err) {
-        entries.push({ file, status: "error", message: err.message || String(err) });
+        entries.push({ file, kind: "competencia", status: "error", message: err.message || String(err) });
       }
     }
 
-    const allRows = entries.filter((e) => e.status === "ok").flatMap((e) => buildCompetenciaRows(e.data));
+    for (const file of selectedPruebaFiles) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const data = await parsePruebaDocx(buffer);
+        if (data.questions.length === 0) {
+          throw new Error("No se encontraron preguntas en el documento. Verifica que el Word tenga el formato de TCO esperado.");
+        }
+        entries.push({ file, kind: "prueba", status: "ok", data });
+      } catch (err) {
+        entries.push({ file, kind: "prueba", status: "error", message: err.message || String(err) });
+      }
+    }
 
-    if (allRows.length > 0) {
-      outputBuffer = await generatePlanilla(templateArrayBuffer, allRows);
+    const competenciaRows = entries
+      .filter((e) => e.status === "ok" && e.kind === "competencia")
+      .flatMap((e) => buildCompetenciaRows(e.data));
+    const pruebaRows = entries
+      .filter((e) => e.status === "ok" && e.kind === "prueba")
+      .flatMap((e) => buildPruebaRows(e.data));
+
+    if (competenciaRows.length > 0 || pruebaRows.length > 0) {
+      outputBuffer = await generatePlanilla(templateArrayBuffer, competenciaRows, pruebaRows);
     }
 
     renderResults(entries);

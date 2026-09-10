@@ -1,16 +1,17 @@
 // Manual regression check for docs/carga/ (the "Carga competencias y
 // pruebas" module): serve docs/ locally, then:
-//   node scripts/e2e-carga-test.mjs <competencia.docx>[,<otra.docx>,...] <output-dir> [base-url]
+//   node scripts/e2e-carga-test.mjs <competencia.docx>[,<otra.docx>,...] <output-dir> [base-url] [prueba.docx,...]
 import { chromium } from "playwright";
 import path from "path";
 
 const DOCX_PATHS = (process.argv[2] ?? "").split(",").filter(Boolean);
 const OUT_DIR = process.argv[3];
 const BASE_URL = process.argv[4] ?? "http://localhost:8899/carga/index.html";
+const PRUEBA_PATHS = (process.argv[5] ?? "").split(",").filter(Boolean);
 
-if (DOCX_PATHS.length === 0 || !OUT_DIR) {
+if ((DOCX_PATHS.length === 0 && PRUEBA_PATHS.length === 0) || !OUT_DIR) {
   console.error(
-    "Usage: node scripts/e2e-carga-test.mjs <path-to-competencia.docx>[,<path2.docx>,...] <output-dir> [base-url]"
+    "Usage: node scripts/e2e-carga-test.mjs <competencia.docx>[,...] <output-dir> [base-url] [prueba.docx,...]"
   );
   process.exit(1);
 }
@@ -26,8 +27,14 @@ page.on("pageerror", (err) => console.log("[pageerror]", err.message));
 
 await page.goto(BASE_URL, { waitUntil: "load" });
 
-await page.setInputFiles("#competencia-input", DOCX_PATHS);
-console.log("selected file text:", await page.locator("#selected-competencia-name").textContent());
+if (DOCX_PATHS.length > 0) {
+  await page.setInputFiles("#competencia-input", DOCX_PATHS);
+  console.log("selected competencia text:", await page.locator("#selected-competencia-name").textContent());
+}
+if (PRUEBA_PATHS.length > 0) {
+  await page.setInputFiles("#prueba-input", PRUEBA_PATHS);
+  console.log("selected prueba text:", await page.locator("#selected-prueba-name").textContent());
+}
 
 await page.click("#generate-btn");
 
