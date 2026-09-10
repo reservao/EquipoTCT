@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SOT — Plataforma TCT · Circular HR</title>
-<meta name="description" content="Genera el Excel del Set de Observación en Terreno a partir del Word de una Competencia." />
+<title>Carga Competencias y Pruebas — Plataforma TCT · Circular HR</title>
+<meta name="description" content="Genera la planilla de carga de Competencias e Instrumentos de Prueba a partir de los Word de cada una." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23D9550C'/%3E%3Cpath d='M6 12.5l4 4 8-9' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -81,6 +81,17 @@
 
   .brand-group { display: flex; align-items: baseline; gap: 0.6rem; }
 
+  .brand {
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+  }
+
+  .brand-sub {
+    color: var(--ink-muted);
+    font-size: 0.92rem;
+  }
+
   nav.modules {
     display: flex;
     gap: 0.9rem;
@@ -101,17 +112,6 @@
   nav.modules a[aria-current="page"] {
     color: var(--accent);
     font-weight: 600;
-  }
-
-  .brand {
-    font-weight: 700;
-    font-size: 1.05rem;
-    letter-spacing: -0.01em;
-  }
-
-  .brand-sub {
-    color: var(--ink-muted);
-    font-size: 0.92rem;
   }
 
   h1 {
@@ -165,6 +165,11 @@
 
   .card + .card { margin-top: 1.25rem; }
 
+  .card h2.card-title {
+    font-size: 0.95rem;
+    margin: 0 0 0.9rem;
+  }
+
   .drop-zone {
     border: 1.5px dashed var(--line);
     border-radius: 10px;
@@ -214,26 +219,6 @@
     font-family: var(--font-mono);
     font-size: 0.82rem;
     color: var(--ink-muted);
-  }
-
-  .logo-row {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    flex-wrap: wrap;
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--line);
-  }
-
-  .logo-row .selected-file {
-    margin-top: 0;
-  }
-
-  .file-picker.secondary {
-    background: transparent;
-    color: var(--ink);
-    border: 1px solid var(--line);
   }
 
   .actions {
@@ -367,17 +352,13 @@
     color: var(--danger);
   }
 
-  button.download-small {
-    margin-top: 0.6rem;
-    background: transparent;
-    color: var(--ok);
-    border: 1px solid var(--ok);
-    border-radius: 7px;
-    padding: 0.35rem 0.7rem;
-    font: inherit;
-    font-weight: 500;
-    font-size: 0.8rem;
-    cursor: pointer;
+  .note-box {
+    margin-top: 1.1rem;
+    font-size: 0.85rem;
+    color: var(--ink-muted);
+    background: var(--surface-sunken);
+    border-radius: 8px;
+    padding: 0.75rem 0.9rem;
   }
 
   footer.note {
@@ -399,41 +380,37 @@
       <span class="brand-sub">· Plataforma TCT</span>
     </div>
     <nav class="modules">
-      <a href="index.html" aria-current="page">SOT</a>
-      <a href="carga/index.html">Carga competencias y pruebas</a>
+      <a href="../index.html">SOT</a>
+      <a href="index.html" aria-current="page">Carga competencias y pruebas</a>
     </nav>
   </header>
 
-  <h1>SOT — Set de Observación en Terreno</h1>
-  <p class="lede">Sube uno o varios Word de Competencias (UCL) y genera el Excel del SOT de cada una, con una hoja por Actividad Clave y sus Criterios de Desempeño.</p>
+  <h1>Carga Competencias y Pruebas</h1>
+  <p class="lede">Sube los Word de Competencias (UCL) y genera la planilla de carga lista para importar, con las hojas "CARGA COMPETENCIA" e "CARGA INSTRUMENTO PRUEBA" completadas.</p>
 
   <div class="steps">
-    <div class="step"><div class="step-num">01</div><div class="step-label">Sube uno o varios Word</div></div>
-    <div class="step"><div class="step-num">02</div><div class="step-label">Genera los SOT</div></div>
-    <div class="step"><div class="step-num">03</div><div class="step-label">Descarga (individual o todo en .zip)</div></div>
+    <div class="step"><div class="step-num">01</div><div class="step-label">Sube uno o varios Word de Competencias</div></div>
+    <div class="step"><div class="step-num">02</div><div class="step-label">Genera la planilla</div></div>
+    <div class="step"><div class="step-num">03</div><div class="step-label">Descarga el Excel</div></div>
   </div>
 
   <div class="card">
-    <div class="drop-zone" id="drop-zone">
+    <h2 class="card-title">Competencias (Word)</h2>
+    <div class="drop-zone" id="competencia-drop-zone">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <p>Arrastra aquí uno o varios documentos Word (.docx) de Competencias, o elige los archivos</p>
+      <p>Arrastra aquí uno o varios Word (.docx) de Competencias, o elige los archivos</p>
       <label class="file-picker">
         Elegir archivos
-        <input type="file" id="file-input" accept=".docx" multiple />
+        <input type="file" id="competencia-input" accept=".docx" multiple />
       </label>
-      <div class="selected-file" id="selected-file-name">Ningún archivo seleccionado</div>
+      <div class="selected-file" id="selected-competencia-name">Ningún archivo seleccionado</div>
     </div>
-
-    <div class="logo-row">
-      <label class="file-picker secondary">
-        Elegir logo de la empresa (opcional)
-        <input type="file" id="logo-input" accept=".png,.jpg,.jpeg" />
-      </label>
-      <div class="selected-file" id="selected-logo-name">Sin logo — quedará vacío junto al de Circular HR</div>
+    <div class="note-box">
+      Por ahora solo se procesan competencias <strong>FUNCIONALES</strong> (el mismo formato de Word usado en SOT). Las conductuales y la carga de pruebas (exámenes) se agregan más adelante.
     </div>
 
     <div class="actions">
-      <button class="primary" id="generate-btn" disabled>Generar SOT</button>
+      <button class="primary" id="generate-btn" disabled>Generar planilla</button>
       <span id="status" hidden></span>
     </div>
 
@@ -442,20 +419,20 @@
 
   <div class="card" id="results" hidden>
     <div class="summary-head">
-      <h2 id="results-heading">Resultados</h2>
-      <button class="download" id="download-all-btn" hidden>Descargar todo (.zip)</button>
+      <h2 id="results-heading">Resultado</h2>
+      <button class="download" id="download-btn" hidden>Descargar planilla</button>
     </div>
     <ul id="results-list" class="results-list"></ul>
   </div>
 
   <footer class="note">
-    Todo el procesamiento ocurre en tu navegador — el Word no se sube a ningún servidor.
+    Todo el procesamiento ocurre en tu navegador — el Word no se sube a ningún servidor. Los campos que no vienen literalmente en el Word (como el código de la competencia) quedan en blanco para completarlos manualmente.
   </footer>
 </div>
 
-<script src="vendor/jszip.min.js"></script>
-<script src="vendor/exceljs.min.js"></script>
-<script src="competencia-parser.js"></script>
+<script src="../vendor/jszip.min.js"></script>
+<script src="../vendor/exceljs.min.js"></script>
+<script src="../competencia-parser.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
