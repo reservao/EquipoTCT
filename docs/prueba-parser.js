@@ -79,16 +79,33 @@ function isAnnotationOnly(text) {
   return /^ok$/i.test(text.trim());
 }
 
+const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+
 // Some questions replace plain alternatives with a "which combination is
-// correct" structure: a handful of unlabeled reference statements followed
-// by answer choices phrased as roman-numeral combinations (e.g. "Alternativa
-// I y III", "Solo II", "I, II y IV"). There's no reliable way to tell where
-// the reference statements end and the real answer choices begin from
-// formatting alone, so these are flagged for manual review instead of
-// risking misaligned columns.
-function looksLikeComboAnswer(text) {
-  const t = text.trim();
-  return /^alternativas?\b/i.test(t) || /^(solo\s+)?[ivx]+(\s*[,y]\s+[ivx]+)*$/i.test(t);
+// correct" structure: a handful of unlabeled reference statements (rendered
+// with their own I./II./III... list numbering) followed by answer choices
+// phrased as combinations of those numerals (e.g. "Alternativa I y III").
+// There's always exactly one blank paragraph separating the two groups --
+// that blank line is the reliable signal for where the reference statements
+// end and the real, selectable answer choices begin, regardless of which
+// list numbering Word happened to assign to either group.
+function splitIntoSegments(paragraphs, fromIdx, toIdx) {
+  const segments = [];
+  let current = [];
+  for (let i = fromIdx; i < toIdx; i++) {
+    const text = normalizeText(paragraphs[i].text);
+    if (!text) {
+      if (current.length > 0) {
+        segments.push(current);
+        current = [];
+      }
+      continue;
+    }
+    if (isAnnotationOnly(text)) continue;
+    current.push({ text, sig: paragraphSignature(paragraphs[i]) });
+  }
+  if (current.length > 0) segments.push(current);
+  return segments;
 }
 
 async function parsePruebaDocx(arrayBuffer) {
@@ -127,28 +144,23 @@ async function parsePruebaDocx(arrayBuffer) {
   for (let qi = 0; qi < questionIdxs.length; qi++) {
     const qIdx = questionIdxs[qi];
     const nextQIdx = qi + 1 < questionIdxs.length ? questionIdxs[qi + 1] : paragraphs.length;
-    const pregunta = normalizeText(paragraphs[qIdx].text);
 
     const hasImage = paragraphs.slice(qIdx + 1, nextQIdx).some((p) => p.hasImage);
 
-    const altParagraphs = [];
-    for (let i = qIdx + 1; i < nextQIdx; i++) {
-      const text = normalizeText(paragraphs[i].text);
-      if (text && !isAnnotationOnly(text)) altParagraphs.push({ text, sig: paragraphSignature(paragraphs[i]) });
-    }
+    const segments = splitIntoSegments(paragraphs, qIdx + 1, nextQIdx);
+    const altParagraphs = segments.length > 0 ? segments[segments.length - 1] : [];
+    const referenceParagraphs = segments.slice(0, -1).flat();
 
-    const comboStyle = altParagraphs.filter((a) => looksLikeComboAnswer(a.text)).length >= 2;
+    let pregunta = normalizeText(paragraphs[qIdx].text);
+    if (referenceParagraphs.length > 0) {
+      pregunta += " " + referenceParagraphs.map((p, idx) => `${ROMAN_NUMERALS[idx] || idx + 1}. ${p.text}`).join(" ");
+    }
 
     let alternativas = [];
     let correctaIndex = null;
     let needsReview = false;
 
     if (altParagraphs.length === 0) {
-      needsReview = true;
-    } else if (comboStyle) {
-      // Only the trailing run of combo-style choices are real alternatives;
-      // the rest are unlabeled reference statements this parser can't
-      // safely fold into the question text without risking wrong numbering.
       needsReview = true;
     } else if (altParagraphs.length > 6) {
       needsReview = true;
