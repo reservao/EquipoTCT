@@ -46,11 +46,13 @@ const MAX_ALTERNATIVAS = 6;
 // answer couldn't be determined (or a question uses a combination format
 // with more than 6 options), the RESPUESTA_* columns are left blank rather
 // than guessed, per the same "blank if not literal" rule as competencias.
+// needsReview is carried alongside so the row can be flagged visually in
+// the generated sheet instead of the user having to hunt for blank cells.
 function buildPruebaRows(data) {
   const nombre = data.nombre || "";
   return data.questions.map((q, idx) => {
     const pregunta = `${idx + 1}.\t${q.pregunta}`;
-    const row = [
+    const values = [
       "", // CODIGO PRUEBA/ENCUESTA -- not present in any sample document
       nombre,
       TIPO_PREGUNTA,
@@ -59,11 +61,33 @@ function buildPruebaRows(data) {
       TIPO_RESPUESTA,
     ];
     for (let i = 0; i < MAX_ALTERNATIVAS; i++) {
-      row.push(q.needsReview ? "" : q.alternativas[i] || "");
+      values.push(q.needsReview ? "" : q.alternativas[i] || "");
     }
-    row.push(q.needsReview ? "" : q.correctaIndex + 1);
-    return row;
+    values.push(q.needsReview ? "" : q.correctaIndex + 1);
+    return { values, needsReview: q.needsReview };
   });
+}
+
+// Dark red fill + white text, applied to every cell of a row that needs
+// manual review -- makes those rows impossible to miss when skimming the
+// sheet, instead of only showing up as blank cells someone has to notice.
+//
+// ExcelJS shares one style object across every cell that hasn't been
+// individually styled yet (all the template's blank data-entry cells point
+// to the same object) -- setting `cell.fill = ...` directly mutates that
+// shared object, silently painting every other untouched cell that happens
+// to share it too. Replacing `cell.style` wholesale (spreading the existing
+// style into a new object) gives the cell its own independent style entry
+// instead of mutating the shared one.
+function markRowForReview(excelRow, columnCount) {
+  for (let col = 1; col <= columnCount; col++) {
+    const cell = excelRow.getCell(col);
+    cell.style = {
+      ...cell.style,
+      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF7A1212" } },
+      font: { ...cell.font, color: { argb: "FFFFFFFF" } },
+    };
+  }
 }
 
 async function generatePlanilla(templateArrayBuffer, competenciaRows, pruebaRows) {
@@ -84,11 +108,12 @@ async function generatePlanilla(templateArrayBuffer, competenciaRows, pruebaRows
   if (pruebaRows.length > 0) {
     const ws = workbook.getWorksheet("CARGA INSTRUMENTO PRUEBA");
     if (!ws) throw new Error("La plantilla no tiene la hoja 'CARGA INSTRUMENTO PRUEBA'.");
-    pruebaRows.forEach((row, idx) => {
+    pruebaRows.forEach(({ values, needsReview }, idx) => {
       const excelRow = ws.getRow(idx + 2);
-      row.forEach((value, colIdx) => {
+      values.forEach((value, colIdx) => {
         excelRow.getCell(colIdx + 1).value = value || null;
       });
+      if (needsReview) markRowForReview(excelRow, values.length);
     });
   }
 
