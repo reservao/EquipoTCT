@@ -208,6 +208,12 @@ function pruebaMeta(data) {
   return parts.join(" · ");
 }
 
+// Built with createElement/textContent rather than innerHTML template
+// strings -- entry.file.name is the uploaded file's own name, which the
+// person providing the file fully controls (e.g. a filename ending in
+// ".docx" can still contain "<img src=x onerror=...>" before that). Setting
+// it via textContent renders it as inert text; interpolating it into an
+// innerHTML string would execute it.
 function renderResults(entries) {
   resultsListEl.innerHTML = "";
   const okCount = entries.filter((r) => r.status === "ok").length;
@@ -217,17 +223,34 @@ function renderResults(entries) {
   for (const entry of entries) {
     const li = document.createElement("li");
     li.className = "result-row";
-    const badgeClass = entry.status === "ok" ? "badge-ok" : "badge-error";
-    const badgeText = entry.status === "ok" ? "OK" : "ERROR";
-    const meta = entry.status === "ok" ? (entry.kind === "competencia" ? competenciaMeta(entry.data) : pruebaMeta(entry.data)) : "";
-    li.innerHTML = `
-      <div class="result-header">
-        <span class="result-name">${entry.file.name}</span>
-        <span class="badge ${badgeClass}">${badgeText}</span>
-      </div>
-      ${meta ? `<div class="result-meta">${meta}</div>` : ""}
-      ${entry.status === "error" ? `<div class="result-error">${entry.message}</div>` : ""}
-    `;
+
+    const header = document.createElement("div");
+    header.className = "result-header";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "result-name";
+    nameEl.textContent = entry.file.name;
+    header.appendChild(nameEl);
+
+    const badge = document.createElement("span");
+    badge.className = `badge ${entry.status === "ok" ? "badge-ok" : "badge-error"}`;
+    badge.textContent = entry.status === "ok" ? "OK" : "ERROR";
+    header.appendChild(badge);
+
+    li.appendChild(header);
+
+    if (entry.status === "ok") {
+      const meta = document.createElement("div");
+      meta.className = "result-meta";
+      meta.textContent = entry.kind === "competencia" ? competenciaMeta(entry.data) : pruebaMeta(entry.data);
+      li.appendChild(meta);
+    } else {
+      const err = document.createElement("div");
+      err.className = "result-error";
+      err.textContent = entry.message;
+      li.appendChild(err);
+    }
+
     resultsListEl.appendChild(li);
   }
 
