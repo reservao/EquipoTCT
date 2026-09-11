@@ -85,10 +85,11 @@ const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", 
 // correct" structure: a handful of unlabeled reference statements (rendered
 // with their own I./II./III... list numbering) followed by answer choices
 // phrased as combinations of those numerals (e.g. "Alternativa I y III").
-// There's always exactly one blank paragraph separating the two groups --
+// There's usually exactly one blank paragraph separating the two groups --
 // that blank line is the reliable signal for where the reference statements
-// end and the real, selectable answer choices begin, regardless of which
-// list numbering Word happened to assign to either group.
+// end and the real, selectable answer choices begin. (Word's own list id
+// per paragraph was tried as a second signal, but it turned out to change
+// between ordinary alternatives too -- not safe to rely on.)
 function splitIntoSegments(paragraphs, fromIdx, toIdx) {
   const segments = [];
   let current = [];
