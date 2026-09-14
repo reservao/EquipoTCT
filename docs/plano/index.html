@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Carga Competencias y Pruebas — Plataforma TCT · Circular HR</title>
-<meta name="description" content="Genera la planilla de carga de Competencias e Instrumentos de Prueba a partir de los Word de cada una." />
+<title>UCL a Plano — Plataforma TCT · Circular HR</title>
+<meta name="description" content="Genera el Plano de contenidos formativos (actividades, criterios, conocimientos y herramientas) a partir de los Word de Competencia (UCL)." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23D9550C'/%3E%3Cpath d='M6 12.5l4 4 8-9' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -393,17 +393,17 @@
     </div>
     <nav class="modules">
       <a href="../index.html">SOT</a>
-      <a href="index.html" aria-current="page">Carga</a>
-      <a href="../plano/index.html">UCL a Plano</a>
+      <a href="../carga/index.html">Carga</a>
+      <a href="index.html" aria-current="page">UCL a Plano</a>
     </nav>
   </header>
 
-  <h1>Carga Competencias y Pruebas</h1>
-  <p class="lede">Sube los Word de Competencias (UCL) y de Pruebas (TCO) y genera la planilla de carga lista para importar, con las hojas "CARGA COMPETENCIA" e "CARGA INSTRUMENTO PRUEBA" completadas.</p>
+  <h1>UCL a Plano</h1>
+  <p class="lede">Sube uno o varios Word de Competencias (UCL) y genera el Plano con una fila por Actividad Clave, Criterio, Conocimiento y Herramienta.</p>
 
   <div class="steps">
-    <div class="step"><div class="step-num">01</div><div class="step-label">Sube Word de Competencias y/o Pruebas</div></div>
-    <div class="step"><div class="step-num">02</div><div class="step-label">Genera la planilla</div></div>
+    <div class="step"><div class="step-num">01</div><div class="step-label">Sube uno o varios Word de Competencias</div></div>
+    <div class="step"><div class="step-num">02</div><div class="step-label">Genera el Plano</div></div>
     <div class="step"><div class="step-num">03</div><div class="step-label">Descarga el Excel</div></div>
   </div>
 
@@ -419,29 +419,11 @@
       <div class="selected-file" id="selected-competencia-name">Ningún archivo seleccionado</div>
     </div>
     <div class="note-box">
-      Por ahora solo se procesan competencias <strong>FUNCIONALES</strong> (el mismo formato de Word usado en SOT). Las competencias conductuales se agregan más adelante.
+      Cada fila queda con Perfil, Competencia, Tipo de Contenido y Contenido. Las columnas "Nombre Módulo", "Tipo de módulo" y "pendiente" quedan en blanco — no vienen literalmente en el Word, sino de un catálogo de módulos de capacitación que esta herramienta no tiene, así que se completan a mano en el Excel.
     </div>
-  </div>
 
-  <div class="card">
-    <h2 class="card-title">Pruebas / TCO (Word)</h2>
-    <div class="drop-zone" id="prueba-drop-zone">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <p>Arrastra aquí uno o varios Word (.docx) de Pruebas (TCO), o elige los archivos</p>
-      <label class="file-picker">
-        Elegir archivos
-        <input type="file" id="prueba-input" accept=".docx" multiple />
-      </label>
-      <div class="selected-file" id="selected-prueba-name">Ningún archivo seleccionado</div>
-    </div>
-    <div class="note-box">
-      La respuesta correcta se detecta automáticamente comparando el formato (color, negrita, tipografía) de cada alternativa contra sus hermanas: la que se distingue del resto es la correcta. Las preguntas de combinaciones (I, II, III… con opciones tipo "Alternativas I y III") también se reconocen automáticamente. Solo si ninguna alternativa se distingue con claridad, esa pregunta queda sin respuesta marcada para completarla manualmente en el Excel.
-    </div>
-  </div>
-
-  <div class="card">
     <div class="actions">
-      <button class="primary" id="generate-btn" disabled>Generar planilla</button>
+      <button class="primary" id="generate-btn" disabled>Generar Plano</button>
       <span id="status" hidden></span>
     </div>
 
@@ -451,20 +433,20 @@
   <div class="card" id="results" hidden>
     <div class="summary-head">
       <h2 id="results-heading">Resultado</h2>
-      <button class="download" id="download-btn" hidden>Descargar planilla</button>
+      <button class="download" id="download-btn" hidden>Descargar Plano</button>
     </div>
     <ul id="results-list" class="results-list"></ul>
   </div>
 
   <footer class="note">
-    Todo el procesamiento ocurre en tu navegador — el Word no se sube a ningún servidor. Los campos que no vienen literalmente en el Word (como el código de la competencia o de la prueba) quedan en blanco para completarlos manualmente.
+    Todo el procesamiento ocurre en tu navegador — el Word no se sube a ningún servidor.
   </footer>
 </div>
 
 <script src="../vendor/jszip.min.js"></script>
 <script src="../vendor/exceljs.min.js"></script>
 <script src="../competencia-parser.js"></script>
-<script src="../prueba-parser.js"></script>
+<script src="../plano-parser.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -31,6 +31,7 @@ const HEADER_LABELS = {
   subproceso: "subproceso",
   "perfil(es)": "perfiles",
   perfil: "perfiles",
+  nivel: "perfiles",
   "fecha de elaboracion": "fecha",
 };
 
@@ -62,6 +63,50 @@ function parseParagraphs(documentXml) {
   });
 }
 
+// "Conocimientos" is rendered as a 2-column table (not a bulleted list like
+// Actividades/Herramientas): the first column merges "Básicos"/"Técnicos"
+// down across several rows via vMerge, the second column holds one
+// knowledge item's text per row. Table cells are still just <w:p> elements
+// under the hood, so this walks the raw <w:tbl> markup directly rather than
+// the flat paragraph list used for everything else.
+function parseConocimientosTable(documentXml) {
+  const result = { basicos: [], tecnicos: [] };
+  const tables = documentXml.match(/<w:tbl>[\s\S]*?<\/w:tbl>/g) || [];
+
+  const cellText = (cellXml) => {
+    const textMatches = cellXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+    return normalizeText(textMatches.map((t) => t.replace(/<w:t[^>]*>/, "").replace(/<\/w:t>/, "")).join(""));
+  };
+
+  for (const table of tables) {
+    const rows = table.match(/<w:tr\b[\s\S]*?<\/w:tr>/g) || [];
+    if (rows.length < 2) continue;
+    const headerCells = rows[0].match(/<w:tc>[\s\S]*?<\/w:tc>/g) || [];
+    if (headerCells.length < 2) continue;
+    const header0 = stripAccentsLower(cellText(headerCells[0]));
+    const header1 = stripAccentsLower(cellText(headerCells[1]));
+    if (!header0.includes("tipo de conocimiento") || !header1.includes("ambito")) continue;
+
+    let currentCategory = null;
+    for (let i = 1; i < rows.length; i++) {
+      const cells = rows[i].match(/<w:tc>[\s\S]*?<\/w:tc>/g) || [];
+      if (cells.length < 2) continue;
+      const categoryText = cellText(cells[0]);
+      if (categoryText) currentCategory = stripAccentsLower(categoryText);
+      const item = cellText(cells[1]);
+      if (!item) continue;
+      if (currentCategory && currentCategory.startsWith("basic")) {
+        result.basicos.push(item);
+      } else if (currentCategory && currentCategory.startsWith("tecnic")) {
+        result.tecnicos.push(item);
+      }
+    }
+    break;
+  }
+
+  return result;
+}
+
 async function parseCompetenciaDocx(arrayBuffer) {
   const zip = await JSZip.loadAsync(arrayBuffer);
   const documentEntry = zip.file("word/document.xml");
@@ -84,6 +129,9 @@ async function parseCompetenciaDocx(arrayBuffer) {
     perfiles: "",
     fecha: "",
     activities: [],
+    conocimientosBasicos: [],
+    conocimientosTecnicos: [],
+    herramientas: [],
   };
 
   for (let i = 0; i < paragraphs.length - 1; i++) {
@@ -118,6 +166,22 @@ async function parseCompetenciaDocx(arrayBuffer) {
       } else if (p.ilvl === "1" && current) {
         current.criterios.push(text);
       }
+    }
+  }
+
+  const conocimientos = parseConocimientosTable(documentXml);
+  data.conocimientosBasicos = conocimientos.basicos;
+  data.conocimientosTecnicos = conocimientos.tecnicos;
+
+  const herramientasIdx = paragraphs.findIndex(
+    (p) => p.style === "Ttulo1" && stripAccentsLower(p.text).startsWith("herramientas")
+  );
+  if (herramientasIdx !== -1) {
+    let endIdx = paragraphs.findIndex((p, idx) => idx > herramientasIdx && p.style === "Ttulo1");
+    if (endIdx === -1) endIdx = paragraphs.length;
+    for (let i = herramientasIdx + 1; i < endIdx; i++) {
+      const text = normalizeText(paragraphs[i].text);
+      if (text) data.herramientas.push(text);
     }
   }
 

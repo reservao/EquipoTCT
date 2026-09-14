@@ -21,6 +21,13 @@ Sube uno o varios Word de Competencias (UCL) y/o de Pruebas (TCO) y genera la pl
 - **App:** [reservao.github.io/EquipoTCT/carga/](https://reservao.github.io/EquipoTCT/carga/)
 - **Código:** `docs/carga/` + `docs/competencia-parser.js` (parser de Word de competencias, compartido con SOT) + `docs/prueba-parser.js` (parser de Word de pruebas/TCO) + `docs/carga/assets/planilla-carga-template.xlsx` (plantilla base)
 
+## Módulo UCL a Plano
+
+Sube uno o varios Word de Competencias (UCL) y genera el "Plano": un Excel con una fila por Actividad Clave, Criterio, Conocimiento (básico/técnico) y Herramienta, con las columnas `Perfil`, `Competencia`, `Tipo de Contenido`, `Contenido` y `Observaciones` — mismo formato que el archivo de referencia del equipo. Las columnas `Nombre Módulo`, `Tipo de modulo` y `pendiente` quedan en blanco: categorizan cada conocimiento/herramienta contra un catálogo interno de módulos de capacitación que no está en el Word ni disponible para esta herramienta, así que se completan a mano.
+
+- **App:** [reservao.github.io/EquipoTCT/plano/](https://reservao.github.io/EquipoTCT/plano/)
+- **Código:** `docs/plano/` + `docs/competencia-parser.js` (además de Actividades/Criterios, también extrae la tabla de Conocimientos y la lista de Herramientas) + `docs/plano-parser.js` (arma las filas del Plano)
+
 ## Pruebas
 
 Los scripts en `scripts/` usan Playwright para probar la app estática end-to-end:
@@ -31,6 +38,7 @@ npx playwright install chromium   # si no está ya instalado
 node scripts/e2e-test.mjs <competencia.docx>[,<otra.docx>,...] <output-dir> [base-url]
 node scripts/e2e-logo-test.mjs <competencia.docx> <logo.png> <output-dir> [base-url]
 node scripts/e2e-carga-test.mjs <competencia.docx>[,<otra.docx>,...] <output-dir> [base-url] [prueba.docx,...]
+node scripts/e2e-plano-test.mjs <competencia.docx>[,<otra.docx>,...] <output-dir> [base-url]
 ```
 
-Por defecto apuntan a `http://localhost:8899/index.html` (o `/carga/index.html`); sirve `docs/` con cualquier servidor estático (ej. `python3 -m http.server 8899 -d docs`) antes de correrlos.
+Por defecto apuntan a `http://localhost:8899/index.html` (o `/carga/index.html`, `/plano/index.html`); sirve `docs/` con cualquier servidor estático (ej. `python3 -m http.server 8899 -d docs`) antes de correrlos.
