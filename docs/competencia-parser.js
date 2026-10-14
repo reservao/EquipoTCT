@@ -160,8 +160,21 @@ async function parseCompetenciaDocx(arrayBuffer) {
       const p = paragraphs[i];
       const text = normalizeText(p.text);
       if (!text) continue;
-      if (p.ilvl === "0") {
-        current = { title: text, criterios: [] };
+      // Activities are normally the outer level (ilvl "0") of the numbered
+      // list, criterios the inner one ("1") -- but some documents have the
+      // activity heading typed as plain text instead of using Word's list
+      // formatting for it (criterios still correctly listed below it), so
+      // it carries no ilvl at all. Its own literal "N. " numbering (already
+      // baked into the text by whoever wrote it) is what tells it apart from
+      // a stray paragraph in that case.
+      const looksLikeActivity = p.ilvl == null && /^\d+[.)]\s/.test(text);
+      if (p.ilvl === "0" || looksLikeActivity) {
+        // Some documents also type the activity's own "N. " numbering
+        // literally into the text (on top of, or instead of, Word's list
+        // numbering) -- stripped here so SOT/Carga/Plano's own synthesized
+        // numbering isn't duplicated on top of it (e.g. "2.\t2. Establecer…").
+        const title = text.replace(/^\d+[.)]\s*/, "");
+        current = { title, criterios: [] };
         data.activities.push(current);
       } else if (p.ilvl === "1" && current) {
         current.criterios.push(text);

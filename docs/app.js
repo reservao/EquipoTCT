@@ -141,6 +141,22 @@ function estimateCriterioRowHeight(ws, text) {
   return lines * POINTS_PER_LINE + 6;
 }
 
+// The template's print area is a fixed "A1:N22" -- sized for its own 6
+// template criterio rows (16-21) plus one trailing margin row. It isn't
+// recalculated when setCriterioRowCount() adds or removes rows, so once a
+// competencia had more than 7 criterios (pushing content past row 22), that
+// extra content silently fell outside the printed/PDF page even though it
+// was right there on screen. Keeping the same "one row past the last
+// criterio" margin the template itself uses, just recomputed for however
+// many rows are actually there now.
+function updatePrintAreaBottom(ws, newBottomRow) {
+  const printArea = ws.pageSetup.printArea;
+  if (!printArea) return;
+  const match = printArea.match(/^([A-Z]+1):([A-Z]+)\d+$/);
+  if (!match) return;
+  ws.pageSetup.printArea = `${match[1]}:${match[2]}${newBottomRow}`;
+}
+
 function fillActivitySheet(ws, data, activityIndex) {
   const activity = data.activities[activityIndex];
 
@@ -152,6 +168,7 @@ function fillActivitySheet(ws, data, activityIndex) {
   ws.getCell("D9").value = `${activityIndex + 1}.\t${activity.title}`;
 
   setCriterioRowCount(ws, activity.criterios.length);
+  updatePrintAreaBottom(ws, BASE_CRITERIO_ROW + activity.criterios.length);
 
   activity.criterios.forEach((criterio, j) => {
     const row = BASE_CRITERIO_ROW + j;
