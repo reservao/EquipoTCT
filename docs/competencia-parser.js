@@ -180,6 +180,33 @@ async function parseCompetenciaDocx(arrayBuffer) {
         current.criterios.push(text);
       }
     }
+
+    // Some documents don't distinguish activities from criterios by ilvl at
+    // all -- every paragraph in the section (activity headings included)
+    // sits at the same ilvl "1", with no literal numbering either. The only
+    // remaining signal is structural: a blank paragraph separates each
+    // activity's block from the next, same as the blank line that marks a
+    // "combo" answer boundary in pruebas (see prueba-parser.js). Only used
+    // as a last resort, when the ilvl-based pass above found nothing, so it
+    // never second-guesses a document that already parsed correctly.
+    if (data.activities.length === 0) {
+      let block = [];
+      const flushBlock = () => {
+        if (block.length === 0) return;
+        const title = block[0].replace(/^\d+[.)]\s*/, "");
+        data.activities.push({ title, criterios: block.slice(1) });
+        block = [];
+      };
+      for (let i = startIdx + 1; i < endIdx; i++) {
+        const text = normalizeText(paragraphs[i].text);
+        if (!text) {
+          flushBlock();
+          continue;
+        }
+        block.push(text);
+      }
+      flushBlock();
+    }
   }
 
   const conocimientos = parseConocimientosTable(documentXml);
