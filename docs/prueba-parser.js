@@ -152,7 +152,11 @@ async function parsePruebaDocx(arrayBuffer) {
     const altParagraphs = segments.length > 0 ? segments[segments.length - 1] : [];
     const referenceParagraphs = segments.slice(0, -1).flat();
 
-    let pregunta = normalizeText(paragraphs[qIdx].text);
+    // Some documents type the question's own "N. " numbering literally into
+    // the text, on top of Word's paragraph formatting -- stripped here so
+    // the numbering buildPruebaRows adds isn't duplicated on top of it
+    // (same issue, same fix, as activity titles in competencia-parser.js).
+    let pregunta = normalizeText(paragraphs[qIdx].text).replace(/^\d+[.)]\s*/, "");
     if (referenceParagraphs.length > 0) {
       pregunta += " " + referenceParagraphs.map((p, idx) => `${ROMAN_NUMERALS[idx] || idx + 1}. ${p.text}`).join(" ");
     }
