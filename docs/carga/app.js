@@ -40,6 +40,7 @@ function buildCompetenciaRows(data) {
 const TIPO_PREGUNTA = "Alternativas";
 const TIPO_RESPUESTA = "Alternativa Default";
 const MAX_ALTERNATIVAS = 6;
+const ALT_LETTERS = ["a", "b", "c", "d", "e", "f"];
 
 // A row is emitted for every question so the literal fields (nombre,
 // pregunta, tipo) don't need to be typed by hand -- but when the correct
@@ -48,6 +49,14 @@ const MAX_ALTERNATIVAS = 6;
 // than guessed, per the same "blank if not literal" rule as competencias.
 // needsReview is carried alongside so the row can be flagged visually in
 // the generated sheet instead of the user having to hunt for blank cells.
+//
+// The Word shows each alternative with a letter in front of it (a., b.,
+// c.…), but that's Word's own list formatting, not literal text in the
+// paragraph -- so the extracted text never carries it, and some question
+// bodies even assume the reader sees it (e.g. "Alternativas a y b son
+// correctas."). Re-added here the same way activity/criterio/pregunta
+// numbering is synthesized elsewhere, so the loaded instrument shows the
+// same lettering the Word did.
 function buildPruebaRows(data) {
   const nombre = data.nombre || "";
   return data.questions.map((q, idx) => {
@@ -61,7 +70,8 @@ function buildPruebaRows(data) {
       TIPO_RESPUESTA,
     ];
     for (let i = 0; i < MAX_ALTERNATIVAS; i++) {
-      values.push(q.needsReview ? "" : q.alternativas[i] || "");
+      const alt = !q.needsReview && q.alternativas[i];
+      values.push(alt ? `${ALT_LETTERS[i]}. ${alt}` : "");
     }
     values.push(q.needsReview ? "" : q.correctaIndex + 1);
     return { values, needsReview: q.needsReview };
