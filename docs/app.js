@@ -1,4 +1,4 @@
-/* global JSZip, ExcelJS, parseCompetenciaDocx, isPlaceholderCodigo */
+/* global JSZip, ExcelJS, parseCompetenciaDocx, isPlaceholderCodigo, generateSotPptx, SOT_PPTX_DEFAULT_THEME */
 "use strict";
 
 /* docx parsing (parseCompetenciaDocx, isPlaceholderCodigo, HEADER_LABELS,
@@ -345,19 +345,20 @@ async function generateSotWorkbook(data, templateArrayBuffer, logo) {
   return workbook.xlsx.writeBuffer();
 }
 
-function buildOutputFileName(data) {
+function buildOutputFileName(data, extension = "xlsx") {
   const base = data.nombre || "";
   const clean = base
     .replace(/[\\/:*?"<>|]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 80);
-  return `SOT ${clean || "competencia"}.xlsx`;
+  return `SOT ${clean || "competencia"}.${extension}`;
 }
 
 /* ---------- UI wiring ---------- */
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 const fileInput = document.getElementById("file-input");
 const generateBtn = document.getElementById("generate-btn");
@@ -367,6 +368,7 @@ const resultsEl = document.getElementById("results");
 const resultsHeadingEl = document.getElementById("results-heading");
 const resultsListEl = document.getElementById("results-list");
 const downloadAllBtn = document.getElementById("download-all-btn");
+const downloadAllPptBtn = document.getElementById("download-all-ppt-btn");
 const dropZone = document.getElementById("drop-zone");
 const fileNameEl = document.getElementById("selected-file-name");
 const logoInput = document.getElementById("logo-input");
@@ -374,17 +376,59 @@ const logoNameEl = document.getElementById("selected-logo-name");
 
 let selectedFiles = [];
 let selectedLogoFile = null;
+// A logo loaded from an imported client-configuration JSON (see "Cargar
+// configuración" below), kept separate from selectedLogoFile since it
+// didn't come through the file input — a fresh upload via that input always
+// takes precedence over it (see the logoInput listener below).
+let importedLogo = null;
 let results = [];
 
 const LOGO_EXTENSIONS = { "image/png": "png", "image/jpeg": "jpeg" };
+const MIME_BY_LOGO_EXTENSION = { png: "image/png", jpeg: "image/jpeg" };
 
 logoInput.addEventListener("change", (e) => {
   const file = e.target.files && e.target.files[0];
   selectedLogoFile = file || null;
+  if (selectedLogoFile) importedLogo = null;
   logoNameEl.textContent = selectedLogoFile
     ? selectedLogoFile.name
     : "Sin logo — quedará vacío junto al de Circular HR";
+  updateLogoPreviewImage(selectedLogoFile);
 });
+
+// Resolves the company logo currently in effect (freshly uploaded file, or
+// one restored from an imported client configuration) into the
+// {buffer, extension} shape both generators need — generateSotWorkbook's
+// `logo` param and, via blobToDataUri, generateSotPptx's `logoDataUri`.
+async function getLogoBytes() {
+  if (selectedLogoFile) {
+    const extension = LOGO_EXTENSIONS[selectedLogoFile.type];
+    if (!extension) {
+      throw new Error("El logo debe ser un archivo PNG o JPG.");
+    }
+    return { buffer: await selectedLogoFile.arrayBuffer(), extension };
+  }
+  if (importedLogo) {
+    return { buffer: importedLogo.buffer, extension: importedLogo.extension };
+  }
+  return null;
+}
+
+function blobToDataUri(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function getLogoDataUri() {
+  const logo = await getLogoBytes();
+  if (!logo) return null;
+  const mime = MIME_BY_LOGO_EXTENSION[logo.extension] || "image/png";
+  return blobToDataUri(new Blob([logo.buffer], { type: mime }));
+}
 
 function triggerBlobDownload(bufferOrArray, filename, mime) {
   const blob = new Blob([bufferOrArray], { type: mime });
@@ -468,6 +512,16 @@ function renderResults() {
       dlBtn.textContent = `Descargar ${r.outputFileName}`;
       dlBtn.addEventListener("click", () => triggerBlobDownload(r.buffer, r.outputFileName, XLSX_MIME));
       li.appendChild(dlBtn);
+
+      const dlPptBtn = document.createElement("button");
+      dlPptBtn.className = "download-small";
+      dlPptBtn.textContent = "Descargar PPT";
+      const pptErrEl = document.createElement("div");
+      pptErrEl.className = "result-error";
+      pptErrEl.hidden = true;
+      dlPptBtn.addEventListener("click", () => handleDownloadPptRow(r, dlPptBtn, pptErrEl));
+      li.appendChild(dlPptBtn);
+      li.appendChild(pptErrEl);
     } else {
       const errEl = document.createElement("div");
       errEl.className = "result-error";
@@ -481,6 +535,7 @@ function renderResults() {
   resultsHeadingEl.textContent =
     results.length === 1 ? "Resultado" : `Resultados (${successCount}/${results.length} generados)`;
   downloadAllBtn.hidden = successCount === 0;
+  downloadAllPptBtn.hidden = successCount === 0;
   resultsEl.hidden = false;
 }
 
@@ -498,14 +553,7 @@ async function handleGenerate() {
     }
     const templateBuffer = await templateResponse.arrayBuffer();
 
-    let logo = null;
-    if (selectedLogoFile) {
-      const extension = LOGO_EXTENSIONS[selectedLogoFile.type];
-      if (!extension) {
-        throw new Error("El logo debe ser un archivo PNG o JPG.");
-      }
-      logo = { buffer: await selectedLogoFile.arrayBuffer(), extension };
-    }
+    const logo = await getLogoBytes();
 
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
@@ -571,3 +619,212 @@ async function handleDownloadAll() {
 
 generateBtn.addEventListener("click", handleGenerate);
 downloadAllBtn.addEventListener("click", handleDownloadAll);
+
+/* ---------- PPT theme/logo customization panel ---------- */
+
+const THEME_FIELDS = ["navy", "teal", "headerBlueDark", "headerBlueLight", "headerNavySub", "tan"];
+
+function getCurrentTheme() {
+  const theme = {};
+  for (const key of THEME_FIELDS) {
+    theme[key] = document.getElementById(`theme-${key}`).value.replace("#", "");
+  }
+  return theme;
+}
+
+function setThemeInputs(theme) {
+  for (const key of THEME_FIELDS) {
+    const value = theme[key];
+    if (!value) continue;
+    document.getElementById(`theme-${key}`).value = `#${value.replace("#", "")}`;
+  }
+  applyThemePreview();
+}
+
+function applyThemePreview() {
+  const theme = getCurrentTheme();
+  const hex = (key) => `#${theme[key]}`;
+  document.getElementById("pv-band").style.background = hex("navy");
+  document.getElementById("pv-bar1").style.background = hex("teal");
+  document.getElementById("pv-bar2").style.background = hex("teal");
+  document.getElementById("pv-bar3").style.background = hex("teal");
+  document.getElementById("pv-bar4").style.background = hex("teal");
+  document.getElementById("pv-th1").style.background = hex("headerBlueDark");
+  document.getElementById("pv-th2").style.background = hex("headerBlueLight");
+  document.getElementById("pv-th4").style.background = hex("headerBlueLight");
+  document.getElementById("pv-cumple-label").style.background = hex("headerBlueDark");
+  document.getElementById("pv-si").style.background = hex("headerNavySub");
+  document.getElementById("pv-no").style.background = hex("headerNavySub");
+  document.getElementById("pv-tan").style.background = hex("tan");
+}
+
+document.querySelectorAll('.theme-grid input[type="color"]').forEach((input) => {
+  input.addEventListener("input", applyThemePreview);
+});
+document.getElementById("theme-reset-btn").addEventListener("click", () => setThemeInputs(SOT_PPTX_DEFAULT_THEME));
+applyThemePreview();
+
+let pvLogoObjectUrl = null;
+function updateLogoPreviewImage(blobOrFile) {
+  const img = document.getElementById("pv-logo-img");
+  if (pvLogoObjectUrl) {
+    URL.revokeObjectURL(pvLogoObjectUrl);
+    pvLogoObjectUrl = null;
+  }
+  if (blobOrFile) {
+    pvLogoObjectUrl = URL.createObjectURL(blobOrFile);
+    img.src = pvLogoObjectUrl;
+    img.hidden = false;
+  } else {
+    img.src = "";
+    img.hidden = true;
+  }
+}
+
+/* ---------- PPT generation/download ---------- */
+
+async function handleDownloadPptRow(r, btn, errEl) {
+  btn.disabled = true;
+  errEl.hidden = true;
+  const original = btn.textContent;
+  btn.textContent = "Generando PPT…";
+  try {
+    const logoDataUri = await getLogoDataUri();
+    const theme = getCurrentTheme();
+    const buffer = await generateSotPptx(r.data, { logoDataUri, theme });
+    triggerBlobDownload(buffer, buildOutputFileName(r.data, "pptx"), PPTX_MIME);
+  } catch (err) {
+    errEl.textContent = err instanceof Error ? err.message : String(err);
+    errEl.hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+async function handleDownloadAllPpt() {
+  const successes = results.filter((r) => r.status === "done");
+  if (successes.length === 0) return;
+
+  downloadAllPptBtn.disabled = true;
+  const original = downloadAllPptBtn.textContent;
+  downloadAllPptBtn.textContent = "Generando PPT…";
+  errorEl.hidden = true;
+  try {
+    const logoDataUri = await getLogoDataUri();
+    const theme = getCurrentTheme();
+
+    if (successes.length === 1) {
+      const r = successes[0];
+      const buffer = await generateSotPptx(r.data, { logoDataUri, theme });
+      triggerBlobDownload(buffer, buildOutputFileName(r.data, "pptx"), PPTX_MIME);
+      return;
+    }
+
+    const zip = new JSZip();
+    const usedNames = new Set();
+    for (const r of successes) {
+      const buffer = await generateSotPptx(r.data, { logoDataUri, theme });
+      let name = buildOutputFileName(r.data, "pptx");
+      if (usedNames.has(name)) {
+        const base = name.replace(/\.pptx$/, "");
+        let n = 2;
+        while (usedNames.has(`${base}_${n}.pptx`)) n++;
+        name = `${base}_${n}.pptx`;
+      }
+      usedNames.add(name);
+      zip.file(name, buffer);
+    }
+    const zipBuffer = await zip.generateAsync({ type: "arraybuffer" });
+    triggerBlobDownload(zipBuffer, "SOTs_PPT.zip", "application/zip");
+  } catch (err) {
+    errorEl.textContent = err instanceof Error ? err.message : String(err);
+    errorEl.hidden = false;
+  } finally {
+    downloadAllPptBtn.disabled = false;
+    downloadAllPptBtn.textContent = original;
+  }
+}
+
+downloadAllPptBtn.addEventListener("click", handleDownloadAllPpt);
+
+/* ---------- Config (theme + logo) export/import ---------- */
+// Lets the same client configuration be reused across sessions without
+// relying on browser storage: "Descargar configuración" dumps the current
+// colors + logo (as a base64 data URI) to a .json file, and "Cargar
+// configuración" reads one of those back in, repopulating the color
+// pickers, the live preview and the logo used by both the Excel and the
+// PPT generators. Every session still starts blank/default otherwise.
+
+const configInput = document.getElementById("config-input");
+const configNameEl = document.getElementById("selected-config-name");
+
+async function handleConfigDownload() {
+  const theme = getCurrentTheme();
+  let logo = null;
+  try {
+    const logoBytes = await getLogoBytes();
+    if (logoBytes) {
+      const mime = MIME_BY_LOGO_EXTENSION[logoBytes.extension] || "image/png";
+      const dataUri = await blobToDataUri(new Blob([logoBytes.buffer], { type: mime }));
+      const name = (selectedLogoFile && selectedLogoFile.name) || (importedLogo && importedLogo.name) || "logo";
+      logo = { dataUri, name };
+    }
+  } catch (err) {
+    errorEl.textContent = err instanceof Error ? err.message : String(err);
+    errorEl.hidden = false;
+    return;
+  }
+
+  const config = { version: 1, theme, logo };
+  const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "config_cliente_ppt.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function handleConfigUpload(file) {
+  let config;
+  try {
+    config = JSON.parse(await file.text());
+  } catch (err) {
+    configNameEl.textContent = "El archivo de configuración no es un JSON válido.";
+    return;
+  }
+
+  if (config.theme) setThemeInputs(config.theme);
+
+  if (config.logo && config.logo.dataUri) {
+    try {
+      const response = await fetch(config.logo.dataUri);
+      const buffer = await response.arrayBuffer();
+      const mimeMatch = /^data:([^;]+);/.exec(config.logo.dataUri);
+      const mime = (mimeMatch && mimeMatch[1]) || "image/png";
+      const extension = LOGO_EXTENSIONS[mime] || "png";
+      importedLogo = { buffer, extension, name: config.logo.name || "logo" };
+      selectedLogoFile = null;
+      logoInput.value = "";
+      logoNameEl.textContent = `Logo cargado desde configuración: ${importedLogo.name}`;
+      updateLogoPreviewImage(new Blob([buffer], { type: mime }));
+    } catch (err) {
+      configNameEl.textContent = "No se pudo leer el logo incluido en la configuración.";
+      return;
+    }
+  } else {
+    importedLogo = null;
+    updateLogoPreviewImage(null);
+  }
+
+  configNameEl.textContent = `Configuración cargada: ${file.name}`;
+}
+
+document.getElementById("config-download-btn").addEventListener("click", handleConfigDownload);
+configInput.addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (file) handleConfigUpload(file);
+});

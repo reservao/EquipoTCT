@@ -401,6 +401,160 @@
   @media (max-width: 30rem) {
     .steps { grid-template-columns: 1fr; }
   }
+
+  .theme-sub {
+    color: var(--ink-muted);
+    font-size: 0.88rem;
+    margin: -0.5rem 0 1.1rem;
+  }
+
+  .theme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+    gap: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .theme-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  .theme-field input[type="color"] {
+    width: 2.4rem;
+    height: 1.9rem;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: none;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .ppt-preview {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+    font-family: var(--font-sans);
+    background: #fff;
+  }
+
+  .ppt-preview-band {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    min-height: 2.6rem;
+  }
+
+  .ppt-preview-band img {
+    max-height: 1.8rem;
+    max-width: 3.2rem;
+    object-fit: contain;
+  }
+
+  .ppt-preview-title {
+    color: #fff;
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+
+  .ppt-preview-title b { font-size: 0.78rem; }
+
+  .ppt-preview-bars {
+    display: flex;
+    gap: 0.4rem;
+    padding: 0 0.4rem 0.4rem;
+  }
+
+  .ppt-preview-bars-left, .ppt-preview-bars-right {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .ppt-preview-bars-left { flex: 3.3; }
+  .ppt-preview-bars-right { flex: 1.3; }
+
+  .ppt-preview-bar {
+    border-radius: 5px;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.32rem 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ppt-preview-table {
+    display: flex;
+    height: 3.1rem;
+    margin: 0 0.4rem 0.6rem;
+  }
+
+  .ppt-preview-th {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 0.2rem;
+  }
+
+  .ppt-preview-cumple {
+    flex: 0.8;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ppt-preview-cumple-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+  }
+
+  .ppt-preview-cumple-sub {
+    flex: 1;
+    display: flex;
+  }
+
+  .ppt-preview-cumple-sub > div {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 700;
+  }
+
+  .ppt-preview-tan {
+    margin: 0 0.4rem 0.6rem;
+    border-radius: 5px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #1c1006;
+  }
+
+  .config-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+  }
 </style>
 </head>
 <body>
@@ -453,10 +607,79 @@
     <div id="error" hidden></div>
   </div>
 
+  <div class="card" id="ppt-theme-card">
+    <h2>Personalizar PPT</h2>
+    <p class="theme-sub">Define los colores de las franjas y el logo antes de descargar el PPT — se ven al instante en la vista previa. El logo es el mismo que eliges arriba para el Excel.</p>
+
+    <div class="theme-grid">
+      <label class="theme-field">Franja superior (SOT)
+        <input type="color" id="theme-navy" value="#0c3f6e" />
+      </label>
+      <label class="theme-field">Barras (competencia/perfil/código/vigencia)
+        <input type="color" id="theme-teal" value="#00b2ab" />
+      </label>
+      <label class="theme-field">Encabezado tabla — oscuro
+        <input type="color" id="theme-headerBlueDark" value="#00649e" />
+      </label>
+      <label class="theme-field">Encabezado tabla — claro
+        <input type="color" id="theme-headerBlueLight" value="#388abc" />
+      </label>
+      <label class="theme-field">Sub-encabezado SÍ / NO
+        <input type="color" id="theme-headerNavySub" value="#091f83" />
+      </label>
+      <label class="theme-field">Panel Conocimientos / Herramientas
+        <input type="color" id="theme-tan" value="#c3a68e" />
+      </label>
+    </div>
+
+    <div class="ppt-preview" id="ppt-preview">
+      <div class="ppt-preview-band" id="pv-band">
+        <img id="pv-logo-img" alt="" hidden />
+        <div class="ppt-preview-title"><b>SOT</b><br />NOMBRE DE LA COMPETENCIA</div>
+      </div>
+      <div class="ppt-preview-bars">
+        <div class="ppt-preview-bars-left">
+          <div class="ppt-preview-bar" id="pv-bar1">NOMBRE DE LA COMPETENCIA</div>
+          <div class="ppt-preview-bar" id="pv-bar2">PERFIL: MAESTRO DE CONVERSIÓN</div>
+        </div>
+        <div class="ppt-preview-bars-right">
+          <div class="ppt-preview-bar" id="pv-bar3">CÓDIGO:</div>
+          <div class="ppt-preview-bar" id="pv-bar4">VIGENCIA:</div>
+        </div>
+      </div>
+      <div class="ppt-preview-table">
+        <div class="ppt-preview-th" id="pv-th1" style="flex: 1.1;">ACTIVIDAD CLAVE</div>
+        <div class="ppt-preview-th" id="pv-th2" style="flex: 5.3;">CRITERIOS DE DESEMPEÑO</div>
+        <div class="ppt-preview-cumple">
+          <div class="ppt-preview-cumple-label" id="pv-cumple-label">CUMPLE</div>
+          <div class="ppt-preview-cumple-sub">
+            <div id="pv-si">SÍ</div>
+            <div id="pv-no">NO</div>
+          </div>
+        </div>
+        <div class="ppt-preview-th" id="pv-th4" style="flex: 2.5;">OBSERVACIONES</div>
+      </div>
+      <div class="ppt-preview-tan" id="pv-tan">CONOCIMIENTOS · EQUIPOS Y HERRAMIENTAS</div>
+    </div>
+
+    <div class="config-actions">
+      <button class="file-picker secondary" id="theme-reset-btn" type="button">Restablecer colores</button>
+      <button class="file-picker secondary" id="config-download-btn" type="button">Descargar configuración (.json)</button>
+      <label class="file-picker secondary">
+        Cargar configuración (.json)
+        <input type="file" id="config-input" accept=".json" />
+      </label>
+    </div>
+    <div class="selected-file" id="selected-config-name"></div>
+  </div>
+
   <div class="card" id="results" hidden>
     <div class="summary-head">
       <h2 id="results-heading">Resultados</h2>
-      <button class="download" id="download-all-btn" hidden>Descargar todo (.zip)</button>
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <button class="download" id="download-all-btn" hidden>Descargar todo en Excel (.zip)</button>
+        <button class="download" id="download-all-ppt-btn" hidden>Descargar todo en PPT (.zip)</button>
+      </div>
     </div>
     <ul id="results-list" class="results-list"></ul>
   </div>
@@ -468,7 +691,9 @@
 
 <script src="vendor/jszip.min.js"></script>
 <script src="vendor/exceljs.min.js"></script>
+<script src="vendor/pptxgen.min.js"></script>
 <script src="competencia-parser.js"></script>
+<script src="sot-pptx-generator.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
