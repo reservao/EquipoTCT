@@ -78,6 +78,22 @@ function buildPruebaRows(data) {
   });
 }
 
+// The template's "CARGA INSTRUMENTO PRUEBA" sheet was built from a real
+// filled-in example (later scrubbed for the public repo -- see "Revisión de
+// seguridad" in git history), and that scrub only cleared cell *values*, not
+// styles: several RESPUESTA_1..6 cells, at fixed row/column positions, still
+// carry the ORIGINAL example's red font color marking ITS correct answer.
+// Since every new question lands on whichever template row its index maps
+// to, that leftover red has nothing to do with the new question's actual
+// correct alternative (RESPUESTA_CORRECTA) -- it just happens to coincide
+// sometimes and mislead the rest of the time. Clearing any inherited font
+// color before writing a value keeps the sheet's only correctness signal the
+// RESPUESTA_CORRECTA column itself, not stray leftover formatting.
+function clearStrayFontColor(cell) {
+  const { color, ...restFont } = cell.font || {};
+  cell.style = { ...cell.style, font: restFont };
+}
+
 // Dark red fill + white text, applied to every cell of a row that needs
 // manual review -- makes those rows impossible to miss when skimming the
 // sheet, instead of only showing up as blank cells someone has to notice.
@@ -121,7 +137,9 @@ async function generatePlanilla(templateArrayBuffer, competenciaRows, pruebaRows
     pruebaRows.forEach(({ values, needsReview }, idx) => {
       const excelRow = ws.getRow(idx + 2);
       values.forEach((value, colIdx) => {
-        excelRow.getCell(colIdx + 1).value = value || null;
+        const cell = excelRow.getCell(colIdx + 1);
+        clearStrayFontColor(cell);
+        cell.value = value || null;
       });
       if (needsReview) markRowForReview(excelRow, values.length);
     });
